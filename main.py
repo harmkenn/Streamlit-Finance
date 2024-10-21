@@ -9,6 +9,7 @@ st.title("Finance")
 
 def main():
     # Define a dictionary to map radio button values to .py file names
+    
     sub_app_map = {
         "Buy Sell or Hold": "BuySellHold.py",
         "Sub App 2": "subapp2.py"
@@ -17,9 +18,10 @@ def main():
     # Use sidebar for radio button navigation
     with st.sidebar:
         selected_app = st.radio("Choose a sub-app", list(sub_app_map.keys()))
-
+        
     # Load the selected sub-app from the "SubApps" folder
     sub_app_module_name = f"SubApps.{sub_app_map[selected_app]}"
+    st.sidebar.write(sub_app_module_name)
     try:
         sub_app_module = importlib.import_module(sub_app_module_name)
         sub_app_module.run_sub_app()
