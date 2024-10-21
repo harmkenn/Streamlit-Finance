@@ -1,18 +1,24 @@
 import streamlit as st
+import importlib
 
 def main():
+    # Define a dictionary to map radio button values to .py file names
+    sub_app_map = {
+        "Buy Sell or Hold": "BuySellHold.py",
+        "Sub App 2": "subapp2.py"
+    }
+
     # Use sidebar for radio button navigation
     with st.sidebar:
-        sub_apps = ["Sub App 1", "Sub App 2"]
-        selected_app = st.radio("Choose a sub-app", sub_apps)
+        selected_app = st.radio("Choose a sub-app", list(sub_app_map.keys()))
 
-    # Display the selected sub-app in the main screen
-    if selected_app == "Sub App 1":
-        import sub_app1.app as sub_app1_module
-        sub_app1_module.run_sub_app1()
-    elif selected_app == "Sub App 2":
-        import sub_app2.app as sub_app2_module
-        sub_app2_module.run_sub_app2()
+    # Load the selected sub-app from the "SubApps" folder
+    sub_app_module_name = f"SubApps.{sub_app_map[selected_app]}"
+    try:
+        sub_app_module = importlib.import_module(sub_app_module_name)
+        sub_app_module.run_sub_app()
+    except ImportError:
+        st.error(f"Sub-app '{selected_app}' not found.")
 
 if __name__ == "__main__":
     main()
