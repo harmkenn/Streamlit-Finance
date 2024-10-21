@@ -1,6 +1,12 @@
 import streamlit as st
 import importlib
 
+# Set the page layout to wide
+st.set_page_config(layout="wide", page_title=f"Finance")
+
+# Set up the Streamlit interface
+st.title("Finance"
+
 def main():
     # Define a dictionary to map radio button values to .py file names
     sub_app_map = {
