@@ -12,7 +12,7 @@ sub_app_names = {
 }
 
 # Get a list of .py files from the SubApps folder
-sub_apps_folder = 'SubApps'
+sub_apps_folder = 'apps'
 sub_apps = [f for f in os.listdir(sub_apps_folder) if f.endswith('.py')]
 
 # Create radio buttons in the sidebar using the user-friendly names

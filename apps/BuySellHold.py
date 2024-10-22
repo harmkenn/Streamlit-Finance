@@ -11,7 +11,7 @@ st.title("Buy Sell Hold Strategy")
 # Set the ticker symbol
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    ticker = st.selectbox("Select Ticker", ['DGRO','EDEN','INCO','KBWP','SMIN','SOXL','SPXL','SSO','TECL','TQQQ','UPRO'])
+    ticker = st.selectbox("Select Ticker", ['ARGT','EDEN','INCO','KBWP','SMIN','SOXL','SPXL','SSO','TECL','TQQQ','UPRO'])
 with c2:
     bound = st.number_input("Bound", min_value=0.0, max_value=10.0, value=1.1, step=0.1)
 with c4:
@@ -78,7 +78,7 @@ data = data.iloc[200:].copy()
 fig = go.Figure()
 
 # Add OHLC data
-fig.add_trace(go.Ohlc(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='OHLC'))
+fig.add_trace(go.Ohlc(x=data.index.date, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='OHLC'))
 
 # Add moving averages
 fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50-Day MA', line=dict(color='blue', width=1)))
