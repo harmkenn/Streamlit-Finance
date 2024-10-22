@@ -30,10 +30,7 @@ fig.add_trace(go.Ohlc(x=data.index, open=data['Open'], high=data['High'], low=da
 
 
 # Update layout
-fig.update_layout(title=f'OHLC Chart for {ticker}',
-                  xaxis_title='Date',
-                  yaxis_title='Price',
-                  xaxis_rangeslider_visible=True)
+fig.update_layout(title=f'OHLC Chart for {ticker}',xaxis_title='Date', yaxis_title='Price',xaxis_rangeslider_visible=True)
 
 
 # Streamlit app layout
