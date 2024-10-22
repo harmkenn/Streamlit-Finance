@@ -6,7 +6,7 @@ from numpy import sqrt, maximum, minimum
 import datetime as dt
 
 # Set up the Streamlit interface
-st.title("Buy Sell Hold Strategy")
+st.title("Buy Sell Hold Strategy 2")
 
 # Set the ticker symbol
 c1, c2, c3, c4 = st.columns(4)
@@ -78,7 +78,7 @@ data = data.iloc[200:].copy()
 fig = go.Figure()
 
 # Add OHLC data
-fig.add_trace(go.Ohlc(x=data.index.date, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='OHLC'))
+fig.add_trace(go.Ohlc(x=data.index, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='OHLC'))
 
 # Add moving averages
 fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50-Day MA', line=dict(color='blue', width=1)))
