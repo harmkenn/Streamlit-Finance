@@ -82,6 +82,7 @@ fig.add_trace(go.Ohlc(x=data.index, open=data['Open'], high=data['High'], low=da
 
 # Add moving averages
 fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50-Day MA', line=dict(color='blue', width=1)))
+fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close', line=dict(color='blue', width=1)))
 fig.add_trace(go.Scatter(x=data.index, y=data['200_MA'], mode='lines', name='200-Day MA', line=dict(color='red', width=1)))
 fig.add_trace(go.Scatter(x=data.index, y=data['UB'], mode='lines', name='Sell Line', line=dict(color='green', width=1, dash='dash')))
 fig.add_trace(go.Scatter(x=data.index, y=data['LB'], mode='lines', name='Buy Line', line=dict(color='purple', width=1, dash='dash')))
