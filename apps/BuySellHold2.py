@@ -13,10 +13,8 @@ ticker = st.text_input("Enter ticker symbol", value="AAPL")
 
 
 # Set the start and end dates
-start_date = st.date_input("Select start date", value=dt.date(2020, 1, 1), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())  # replace with your desired start date
-end_date = st.date_input("Select end date", value=dt.date.today(), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())  # replace with your desired start date
-
-
+start_date = st.date_input("Select start date", value=dt.date(2020, 1, 1), min_value=dt.date(2010, 1, 1), max_value=dt.date.today()) 
+end_date = st.date_input("Select end date", value=dt.date.today(), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())
 # Fetch historical data for the selected ticker and date range
 data = yf.download(ticker, start=start_date, end=end_date, interval='1d')
 
