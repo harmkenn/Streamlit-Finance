@@ -1,10 +1,13 @@
 # pip install -r requirements.txt
+astropy
 datetime
+ephem
+folium
 geopandas
+geopy
 importlib
 keras
 levenshtein
-matplotlib
 matplotlib
 nbformat
 numpy
@@ -12,8 +15,12 @@ openpyxl
 pandas
 pip
 plotly
+plotly.express
 pydataset
+pyephem
+pygeodesy
 pyinstaller
+pyproj
 requests
 scikit-learn
 scipy
@@ -21,5 +28,7 @@ scrapy
 selenium
 SpeechRecognition
 streamlit
+streamlit_folium
 streamlit-aggrid
 yfinance
+

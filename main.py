@@ -8,7 +8,7 @@ st.set_page_config(layout="wide", page_title=f"Finance")
 # Dictionary that maps .py filenames to user-friendly names
 sub_app_names = {
     'BuySellHold.py': 'Buy Sell or Hold',
-    'subapp2.py': 'Another Sub-App'
+    'BuySellHold2.py': 'Buy Sell or Hold 2',
 }
 
 # Get a list of .py files from the SubApps folder
