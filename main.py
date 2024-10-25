@@ -9,6 +9,9 @@ st.set_page_config(layout="wide", page_title=f"Finance")
 sub_app_names = {
     'BuySellHold.py': 'Buy Sell or Hold',
     'BuySellHold2.py': 'Buy Sell or Hold 2',
+    'HoldVsTrade.py': 'Hold vs. Trade',
+    'etradehunt.py': 'Etrade Hunt',
+    'TQQQplan.py': 'TQQQ Plan'
 }
 
 # Get a list of .py files from the SubApps folder
