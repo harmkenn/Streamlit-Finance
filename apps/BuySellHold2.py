@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
-import plotly.express as px
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 st.title("Stock OHLC Graph")
 
@@ -9,43 +10,16 @@ stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, etc.)")
 if stock_symbol:
     data = yf.download(stock_symbol, period="5y")
 
-    fig = px.line(data, x=data.index, y=['Open', 'High', 'Low', 'Close'], 
-                  title=f"{stock_symbol} OHLC Graph", 
-                  labels={'value': 'Price', 'index': 'Date'})
+    fig, ax = plt.subplots(figsize=(12, 6))
 
-    fig.update_layout(
-        updatemenus=[
-            dict(
-                type="buttons",
-                direction="left",
-                buttons=list([
-                    dict(
-                        args=[{'visible': [True, True, True, True]}],
-                        label="All",
-                        method="update"
-                    ),
-                    dict(
-                        args=[{'visible': [True, False, False, False]}],
-                        label="Open",
-                        method="update"
-                    ),
-                    dict(
-                        args=[{'visible': [False, True, False, False]}],
-                        label="High",
-                        method="update"
-                    ),
-                    dict(
-                        args=[{'visible': [False, False, True, False]}],
-                        label="Low",
-                        method="update"
-                    ),
-                    dict(
-                        args=[{'visible': [False, False, False, True]}],
-                        label="Close",
-                        method="update"
-                    ),
-                ]),
-            ]
-        )
+    sns.lineplot(x=data.index, y=data['Open'], ax=ax, label='Open')
+    sns.lineplot(x=data.index, y=data['High'], ax=ax, label='High')
+    sns.lineplot(x=data.index, y=data['Low'], ax=ax, label='Low')
+    sns.lineplot(x=data.index, y=data['Close'], ax=ax, label='Close')
 
-    st.plotly_chart(fig, use_container_width=True)
+    ax.set_title(f"{stock_symbol} OHLC Graph")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Price")
+    ax.legend()
+
+    st.pyplot(fig)
