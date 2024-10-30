@@ -9,6 +9,7 @@ importlib
 keras
 levenshtein
 matplotlib
+mplfinance
 nbformat
 numpy
 openpyxl
