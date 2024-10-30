@@ -25,6 +25,7 @@ requests
 scikit-learn
 scipy
 scrapy
+seaborn
 selenium
 SpeechRecognition
 streamlit
