@@ -21,6 +21,7 @@ with c4:
 # Fetch historical data for the past year
 data = yf.download(ticker, start=start_date, end=end_date, interval='1d')
 
+
 # Calculate moving averages
 data['50_MA'] = data['Close'].rolling(window=50).mean()
 data['50_SD'] = data['Close'].rolling(window=50).std()
@@ -94,3 +95,6 @@ fig.update_layout(title=f'OHLC Chart for {ticker} with 50 & 200 Day Moving Avera
 
 # Streamlit app layout
 st.plotly_chart(fig)
+
+#data = data.drop(columns=["Adj Close", "Volume"], inplace=True)
+st.dataframe(data.iloc[::-1], width=None, use_container_width=True)
