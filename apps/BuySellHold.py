@@ -7,7 +7,7 @@ import datetime as dt
 
 # Set up the Streamlit interface
 st.title("Buy Sell Hold Strategy")
-
+ 
 # Set the ticker symbol
 c1, c2, c3, c4 = st.columns(4)
 with c1:
