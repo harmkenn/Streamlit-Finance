@@ -11,7 +11,7 @@ st.title("Buy Sell Hold Strategy")
 # Set the ticker symbol
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    ticker = st.selectbox("Select Ticker", ['ARGT','EDEN','INCO','KBWP','SMIN','SOXL','SPXL','SSO','TECL','TQQQ','UPRO'])
+    ticker = st.selectbox("Select Ticker", ['SCHG','EDEN','INCO','KBWP','SMIN','SOXL','SPXL','SSO','TECL','TQQQ','UPRO'])
 with c2:
     bound = st.number_input("Bound", min_value=0.0, max_value=10.0, value=1.1, step=0.1)
 with c4:
@@ -56,12 +56,12 @@ def calculate_mfi(data, window=14):
     data['MFI'] = money_flow_index
     return data
 
-data2 = calculate_mfi(data)
+data = calculate_mfi(data)
 
 # Display final RSI and MFI
 with c1:
-    st.write(f"Final RSI (30,70) for {ticker}: {data2['RSI'].iloc[-1]:.2f}")
-    st.write(f"Final MFI (20,80) for {ticker}: {data2['MFI'].iloc[-1]:.2f}")
+    st.write(f"Final RSI (30,70) for {ticker}: {data['RSI'].iloc[-1]:.2f}")
+    st.write(f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}")
 
 # Display Standard Deviation and Buy/Sell levels
 with c2:
@@ -86,7 +86,6 @@ fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50-D
 fig.add_trace(go.Scatter(x=data.index, y=data['200_MA'], mode='lines', name='200-Day MA', line=dict(color='red', width=1)))
 fig.add_trace(go.Scatter(x=data.index, y=data['UB'], mode='lines', name='Sell Line', line=dict(color='green', width=1, dash='dash')))
 fig.add_trace(go.Scatter(x=data.index, y=data['LB'], mode='lines', name='Buy Line', line=dict(color='purple', width=1, dash='dash')))
-fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close', line=dict(color='orange', width=1, dash='dash')))
 
 # Update layout
 fig.update_layout(title=f'OHLC Chart for {ticker} with 50 & 200 Day Moving Averages',
@@ -99,3 +98,11 @@ st.plotly_chart(fig)
 
 #data = data.drop(columns=["Adj Close", "Volume"], inplace=True)
 st.dataframe(data.iloc[::-1], width=None, use_container_width=True)
+
+# Download button for the dataframe
+st.download_button(
+    label="Download Data as CSV",
+    data=data.to_csv().encode("utf-8"),
+    file_name=f"{ticker}_data.csv",
+    mime="text/csv",
+)
