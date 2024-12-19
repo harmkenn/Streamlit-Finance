@@ -7,7 +7,28 @@ from datetime import datetime, timedelta
 st.title("SOXL Weekly High-Low Volatility (3rd Friday vs. Others)")
 
 try:
-    # ... (Data retrieval and weekly range calculation as before)
+    # Date range for the last 5 years
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=5 * 365)
+
+    # Download SOXL data using yfinance
+    soxl = yf.download("SOXL", start=start_date, end=end_date)
+
+    if soxl.empty:
+        st.error("Could not retrieve SOXL data. Please check the ticker symbol or your internet connection.")
+        st.stop()
+
+    # Add a 'Week' column and a 'Third Friday' boolean column
+    soxl['Week'] = soxl.index.to_period('W')
+    soxl['Third Friday'] = soxl.index.day == 21 #Approximate, see explanation below.
+
+    # Resample to weekly data, taking the high and low
+    weekly_high = soxl.groupby('Week')['High'].max()
+    weekly_low = soxl.groupby('Week')['Low'].min()
+    weekly_third_friday = soxl.groupby('Week')['Third Friday'].any()
+
+    # Calculate the weekly high-low range
+    weekly_range = weekly_high - weekly_low
 
     # Separate third Friday weeks and other weeks
     third_friday_weeks = weekly_range[weekly_third_friday]
