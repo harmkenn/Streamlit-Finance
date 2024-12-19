@@ -1,35 +1,32 @@
 import streamlit as st
-import plotly.graph_objects as go
-import pandas as pd
-import yfinance as yf
-import datetime
+import importlib.util
+import os
 
-def get_soxl_data(start_date, end_date):
-  """Fetches historical data for SOXL between given dates."""
-  try:
-    return yf.download("SOXL", start=start_date, end=end_date)
-  except Exception as e:
-    st.error(f"Error downloading data: {e}")
-    return None
+# Set the page layout to wide
+st.set_page_config(layout="wide", page_title=f"Finance")
 
-def plot_ohlc(weekly_data):
-  """Creates a Plotly candlestick chart for the OHLC data."""
-  fig = go.Figure(data=[go.Candlestick(x=weekly_data.index,
-                                       open=weekly_data['open'],
-                                       high=weekly_data['high'],
-                                       low=weekly_data['low'],
-                                       close=weekly_data['close'])])
-  fig.update_layout(xaxis_title="Date", yaxis_title="Price ($)")
-  st.plotly_chart(fig)
+# Dictionary that maps .py filenames to user-friendly names
+sub_app_names = {
+    'BuySellHold.py': 'Buy Sell or Hold',
+    'BuySellHold2.py': 'Buy Sell or Hold 2',
+    'HoldVsTrade.py': 'Hold vs. Trade',
+    'etradehunt.py': 'Etrade Hunt',
+    'TQQQplan.py': 'TQQQ Plan',
+    'OptionWeek.py': 'Option Week'
+}
 
-st.title("SOXL OHLC Data by Week")
+# Get a list of .py files from the SubApps folder
+sub_apps_folder = 'apps'
+sub_apps = [f for f in os.listdir(sub_apps_folder) if f.endswith('.py')]
 
-# Date range selection
-start_date = st.date_input("Start Date", value=datetime(2018, 1, 1))
-end_date = st.date_input("End Date", value=datetime(2023, 1, 1))
+# Create radio buttons in the sidebar using the user-friendly names
+selected_sub_app_name = st.sidebar.radio('Select a sub-app', list(sub_app_names.values()))
 
-# Data download and processing
-data = get_soxl_data(start_date, end_date)
-if data is not None:
-  weekly_data = data['Close'].resample('W').ohlc()
-  plot_ohlc(weekly_data)
+# Get the corresponding .py filename from the selected name
+selected_sub_app = [k for k, v in sub_app_names.items() if v == selected_sub_app_name][0]
+
+# Import and run the selected sub-app
+if selected_sub_app:
+    spec = importlib.util.spec_from_file_location(selected_sub_app, os.path.join(sub_apps_folder, selected_sub_app))
+    sub_app_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sub_app_module)
