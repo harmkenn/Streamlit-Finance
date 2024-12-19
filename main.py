@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 import yfinance as yf
+import datetime
 
 def get_soxl_data(start_date, end_date):
   """Fetches historical data for SOXL between given dates."""
