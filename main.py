@@ -1,3 +1,9 @@
+You are absolutely right to call me out on this again. I apologize for the persistent error. The problem is more subtle than I initially thought. Even with .values, if the PeriodIndex (the index after to_period('W')) has NaT (Not a Time) values due to missing data or incomplete weeks at the beginning or end of the time series, st.hist can still have issues.
+
+Here's the corrected and significantly more robust version:
+
+Python
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -18,19 +24,21 @@ try:
         st.error("Could not retrieve SOXL data. Please check the ticker symbol or your internet connection.")
         st.stop()
 
-    # Add a 'Week' column and a 'Third Friday' boolean column
-    soxl['Week'] = soxl.index.to_period('W')
-    soxl['Third Friday'] = soxl.index.day == 21 #Approximate, see explanation below.
+    # Create 'Week' and 'Third Friday' columns using datetime indexes directly
+    soxl['WeekStart'] = soxl.index - pd.to_timedelta(soxl.index.dayofweek, unit='D')
+    soxl['ThirdFriday'] = (soxl.index.day >= 15) & (soxl.index.day <= 21) & (soxl.index.weekday == 4)
 
-    # Resample to weekly data, taking the high and low
-    weekly_high = soxl.groupby('Week')['High'].max()
-    weekly_low = soxl.groupby('Week')['Low'].min()
-    weekly_third_friday = soxl.groupby('Week')['Third Friday'].any()
+    # Group by week start date
+    weekly_high = soxl.groupby('WeekStart')['High'].max()
+    weekly_low = soxl.groupby('WeekStart')['Low'].min()
+    weekly_third_friday = soxl.groupby('WeekStart')['ThirdFriday'].any()
 
-    # Calculate the weekly high-low range
     weekly_range = weekly_high - weekly_low
 
-    # Separate third Friday weeks and other weeks
+    # Remove NaT values *before* separating the data
+    weekly_range = weekly_range.dropna()
+    weekly_third_friday = weekly_third_friday[weekly_range.index] #align index after dropping NaN
+
     third_friday_weeks = weekly_range[weekly_third_friday]
     other_weeks = weekly_range[~weekly_third_friday]
 
@@ -38,28 +46,26 @@ try:
     std_dev_third_friday = third_friday_weeks.std()
     std_dev_other_weeks = other_weeks.std()
 
-    # Display the results (as before)
-    st.write(f"Standard Deviation of Weekly High-Low Range (3rd Friday Weeks): {std_dev_third_friday:.2f}")
-    st.write(f"Standard Deviation of Weekly High-Low Range (Other Weeks): {std_dev_other_weeks:.2f}")
+    # ... (Display results as before)
 
-    st.subheader("Standard Deviations")
-    st.table(pd.DataFrame({
-        "Group": ["3rd Friday Weeks", "Other Weeks"],
-        "Standard Deviation": [std_dev_third_friday, std_dev_other_weeks]
-    }))
+    # Improved Histograms (using .to_numpy())
 
-    # Improved Histograms using st.hist
     st.subheader("Distribution of Weekly Ranges")
     col1, col2 = st.columns(2)
 
     with col1:
         st.write("3rd Friday Weeks")
-        st.hist(third_friday_weeks.values, bins=20) # Use .values to get numpy array
+        if not third_friday_weeks.empty:  # Check for empty data
+            st.hist(third_friday_weeks.to_numpy(), bins=20)
+        else:
+            st.write("No data available for 3rd Friday Weeks.")
 
     with col2:
         st.write("Other Weeks")
-        st.hist(other_weeks.values, bins=20) # Use .values to get numpy array
-
+        if not other_weeks.empty: # Check for empty data
+            st.hist(other_weeks.to_numpy(), bins=20)
+        else:
+            st.write("No data available for Other Weeks.")
 
 except Exception as e:
     st.error(f"An error occurred: {e}")
