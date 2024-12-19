@@ -5,15 +5,17 @@ from datetime import date, timedelta
 
 st.title("Stock OHLC Plot with Moving Averages")
 
-# Ticker input
-ticker = st.text_input("Enter Stock Ticker", "SOXL").upper()
+
 
 # Date inputs
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     start_date = st.date_input("Start Date", date.today() - timedelta(days=5 * 365))
 with col2:
     end_date = st.date_input("End Date", date.today())
+with col3:
+    # Ticker input
+    ticker = st.text_input("Enter Stock Ticker", "SOXL").upper()
 
 if ticker:
     if start_date > end_date:
