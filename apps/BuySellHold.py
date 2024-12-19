@@ -99,43 +99,10 @@ st.plotly_chart(fig)
 #data = data.drop(columns=["Adj Close", "Volume"], inplace=True)
 st.dataframe(data.iloc[::-1], width=None, use_container_width=True)
 
-# Analyze by week of the month
-data['Week_of_Month'] = data.index.to_series().apply(lambda x: (x.day - 1) // 7 + 1)
-
-# Calculate weekly returns and volatility
-weekly_data = data.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'})
-weekly_data['Weekly_Return'] = weekly_data['Close'].pct_change()
-weekly_data['Weekly_Volatility'] = weekly_data['Weekly_Return'].rolling(window=4).std() * sqrt(52) # Annualized volatility
-
-# Merge week of month back into weekly data
-weekly_data['Week_of_Month'] = data['Week_of_Month'].resample('W').first()
-
-
-# Analyze volatility by week of the month
-volatility_by_week = weekly_data.groupby('Week_of_Month')['Weekly_Volatility'].mean()
-
-# Display volatility by week
-st.subheader("Average Weekly Volatility by Week of the Month")
-st.bar_chart(volatility_by_week)
-
-#Find the week of the month with the highest volatility
-most_volatile_week = volatility_by_week.idxmax()
-highest_volatility = volatility_by_week.max()
-
-st.write(f"The week of the month with the highest average volatility is week {most_volatile_week} with a volatility of {highest_volatility:.2%}")
-
-
 # Download button for the dataframe
 st.download_button(
     label="Download Data as CSV",
     data=data.to_csv().encode("utf-8"),
     file_name=f"{ticker}_data.csv",
-    mime="text/csv",
-)
-
-st.download_button(
-    label="Download Weekly Data as CSV",
-    data=weekly_data.to_csv().encode("utf-8"),
-    file_name=f"{ticker}_weekly_data.csv",
     mime="text/csv",
 )
