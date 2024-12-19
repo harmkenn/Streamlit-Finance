@@ -1,9 +1,3 @@
-You are absolutely right to call me out on this again. I apologize for the persistent error. The problem is more subtle than I initially thought. Even with .values, if the PeriodIndex (the index after to_period('W')) has NaT (Not a Time) values due to missing data or incomplete weeks at the beginning or end of the time series, st.hist can still have issues.
-
-Here's the corrected and significantly more robust version:
-
-Python
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
