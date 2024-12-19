@@ -98,3 +98,11 @@ st.plotly_chart(fig)
 
 #data = data.drop(columns=["Adj Close", "Volume"], inplace=True)
 st.dataframe(data.iloc[::-1], width=None, use_container_width=True)
+
+# Download button for the dataframe
+st.download_button(
+    label="Download Data as CSV",
+    data=data.to_csv().encode("utf-8"),
+    file_name=f"{ticker}_data.csv",
+    mime="text/csv",
+)
