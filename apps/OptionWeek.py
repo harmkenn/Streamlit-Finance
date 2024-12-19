@@ -1,8 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
-from datetime import date, timedelta, datetime
-import pandas as pd
+from datetime import date, timedelta
 
 st.title("Stock OHLC Plot with Moving Averages")
 
@@ -31,25 +30,6 @@ if ticker:
                 data['50-day MA'] = data['Close'].rolling(window=50).mean()
                 data['200-day MA'] = data['Close'].rolling(window=200).mean()
 
-                # --- Highlight Third Fridays ---
-                third_fridays = []
-                for year in range(start_date.year, end_date.year + 1):
-                    for month in [3, 6, 9, 12]:  # March, June, Sept, Dec
-                        # Find the first Friday of the month
-                        first_day = datetime(year, month, 1)
-                        first_friday = first_day + timedelta((4 - first_day.weekday() + 7) % 7)
-
-                        # Find the third Friday (add 2 weeks)
-                        third_friday = first_friday + timedelta(weeks=2)
-                        third_fridays.append(third_friday.date())
-
-                # Convert the list of dates to pandas DatetimeIndex for efficient filtering
-                third_fridays_index = pd.to_datetime(third_fridays)
-
-                # Create a boolean mask to select rows corresponding to third Fridays
-                third_fridays_mask = data.index.isin(third_fridays_index)
-
-                # --- Plotting ---
                 fig = go.Figure()
 
                 # Add candlestick trace
@@ -66,7 +46,8 @@ if ticker:
                                         mode='lines', name='200-day MA', line=dict(color='red')))
 
                 fig.update_layout(title=f"{ticker} OHLC Chart ({start_date} - {end_date})",
-                                  xaxis_title="Date", yaxis_title="Price",
+                                  xaxis_title="Date",
+                                  yaxis_title="Price",
                                   xaxis_rangeslider_visible=False)
 
                 st.plotly_chart(fig)
@@ -81,9 +62,7 @@ if ticker:
                     st.metric("Low", data['Low'].min().round(2) if not data.empty else "N/A")
 
                 with st.expander("Show raw data"):
-                    # Highlight the third Fridays in the dataframe
-                    styled_df = data.style.apply(lambda x: ['background-color: yellow' if third_fridays_mask[i] else '' for i in range(len(x))], axis=1)
-                    st.dataframe(styled_df)
+                    st.dataframe(data)
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
