@@ -11,7 +11,8 @@ sub_app_names = {
     'BuySellHold2.py': 'Buy Sell or Hold 2',
     'HoldVsTrade.py': 'Hold vs. Trade',
     'etradehunt.py': 'Etrade Hunt',
-    'TQQQplan.py': 'TQQQ Plan'
+    'TQQQplan.py': 'TQQQ Plan',
+    'OptionWeek.py': 'Option Week'
 }
 
 # Get a list of .py files from the SubApps folder
@@ -29,4 +30,3 @@ if selected_sub_app:
     spec = importlib.util.spec_from_file_location(selected_sub_app, os.path.join(sub_apps_folder, selected_sub_app))
     sub_app_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sub_app_module)
-    
