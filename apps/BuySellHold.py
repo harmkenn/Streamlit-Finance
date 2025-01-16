@@ -29,7 +29,34 @@ if ticker:
                 # Calculate moving averages
                 data['50-day MA'] = data['Close'].rolling(window=50).mean()
                 data['200-day MA'] = data['Close'].rolling(window=200).mean()
+                # Calculate RSI
+                def calculate_rsi(data, window=14):
+                    delta = data['Close'].diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+                    rs = gain / loss
+                    data['RSI'] = 100 - (100 / (1 + rs))
+                    return data
 
+                data = calculate_rsi(data)
+
+                # Calculate MFI
+                def calculate_mfi(data, window=14):
+                    typical_price = (data['High'] + data['Low'] + data['Close']) / 3
+                    money_flow = typical_price * data['Volume']
+                    positive_flow = (money_flow.where(typical_price > typical_price.shift(1), 0)).rolling(window=window).sum()
+                    negative_flow = (money_flow.where(typical_price < typical_price.shift(1), 0)).rolling(window=window).sum()
+                    money_flow_index = 100 - (100 / (1 + (positive_flow / negative_flow)))
+                    data['MFI'] = money_flow_index
+                    return data
+
+                data = calculate_mfi(data)
+
+                # Display final RSI and MFI
+                with col1:
+                    st.write(f"Final RSI (30,70) for {ticker}: {data['RSI'].iloc[-1]:.2f}")
+                    st.write(f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}")
+                    
                 fig = go.Figure()
 
                 # Add candlestick trace
