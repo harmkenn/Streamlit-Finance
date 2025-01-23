@@ -32,6 +32,14 @@ def calculate_mfi(data, window=14):
     data['MFI'] = money_flow_index
     return data
 
+def calculate_atr(data, window=14):
+    data['HL'] = data['High'] - data['Low']
+    data['HC'] = abs(data['High'] - data['Close'].shift())
+    data['LC'] = abs(data['Low'] - data['Close'].shift())
+    data['TR'] = data[['HL', 'HC', 'LC']].max(axis=1)
+    data['ATR'] = data['TR'].rolling(window=window).mean()
+    return data
+
 if ticker:
     if start_date > end_date:
         st.error("Error: Start date must be before end date.")
@@ -47,14 +55,17 @@ if ticker:
                 data['50-day MA'] = data['Close'].rolling(window=50).mean()
                 data['200-day MA'] = data['Close'].rolling(window=200).mean()
 
-                # Calculate RSI and MFI
+                # Calculate RSI, MFI, and ATR
                 data = calculate_rsi(data)
                 data = calculate_mfi(data)
+                data = calculate_atr(data)
 
-                # Display final RSI and MFI
+                # Display final RSI, MFI, and ATR
                 with col1:
                     st.write(f"Final RSI (30,70) for {ticker}: {data['RSI'].iloc[-1]:.2f}")
                     st.write(f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}")
+                with col2:
+                    st.write(f"Volatility (ATR, 14-day) for {ticker}: {data['ATR'].iloc[-1]:.2f}")
 
                 fig = go.Figure()
 
@@ -83,8 +94,9 @@ if ticker:
                 with col1:
                     st.metric("Current Price", data['Close'][-1].round(2) if not data.empty else "N/A")
                 with col2:
-                    st.metric("High", data['High'].max().round(2) if not data.empty else "N/A")
+                    st.metric("Volatility (ATR, 14-day)", f"{data['ATR'].iloc[-1]:.2f}")
                 with col3:
+                    st.metric("High", data['High'].max().round(2) if not data.empty else "N/A")
                     st.metric("Low", data['Low'].min().round(2) if not data.empty else "N/A")
 
                 with st.expander("Show raw data"):
