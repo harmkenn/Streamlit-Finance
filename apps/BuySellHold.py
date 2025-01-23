@@ -134,20 +134,22 @@ if ticker:
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric(
+                        "High", data['High'].max().round(2)
+                        if not data.empty else "N/A")
+                    st.metric(
                         "Current Price",
                         current_price.round(2) if not data.empty else "N/A")
+                    st.metric(
+                        "Low", data['Low'].min().round(2)
+                        if not data.empty else "N/A")
+
                 with col2:
                     st.metric(
                         "Volatility (ATR, 14-day)",
                         f"{data['ATR'].iloc[-1]:.2f} ({(data['ATR'].iloc[-1] / current_price * 100):.2f}%)"
                     )
                 with col3:
-                    st.metric(
-                        "High", data['High'].max().round(2)
-                        if not data.empty else "N/A")
-                    st.metric(
-                        "Low", data['Low'].min().round(2)
-                        if not data.empty else "N/A")
+
                     st.metric(
                         "Volatility (30-day)",
                         f"{data['Volatility'].iloc[-1]:.2f} ({(data['Volatility'].iloc[-1] / current_price * 100):.2f}%)"
