@@ -32,6 +32,11 @@ def calculate_mfi(data, window=14):
     data['MFI'] = money_flow_index
     return data
 
+def calculate_volatility(data, window=30):
+    data['Daily Return'] = data['Close'].pct_change()
+    data['Volatility'] = data['Daily Return'].rolling(window=window).std() * (252**0.5)  # Annualized volatility
+    return data
+
 def calculate_atr(data, window=14):
     data['HL'] = data['High'] - data['Low']
     data['HC'] = abs(data['High'] - data['Close'].shift())
@@ -59,6 +64,7 @@ if ticker:
                 data = calculate_rsi(data)
                 data = calculate_mfi(data)
                 data = calculate_atr(data)
+                data = calculate_volatility(data)
 
                 # Display final RSI, MFI, and ATR
                 with col1:
@@ -66,6 +72,7 @@ if ticker:
                     st.write(f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}")
                 with col2:
                     st.write(f"Volatility (ATR, 14-day) for {ticker}: {data['ATR'].iloc[-1]:.2f}")
+                    st.write(f"Volatility (30-day) for {ticker}: {data['Volatility'].iloc[-1]:.2f}")
 
                 fig = go.Figure()
 
@@ -98,6 +105,7 @@ if ticker:
                 with col3:
                     st.metric("High", data['High'].max().round(2) if not data.empty else "N/A")
                     st.metric("Low", data['Low'].min().round(2) if not data.empty else "N/A")
+                    st.metric("Volatility (30-day)", f"{data['Volatility'].iloc[-1]:.2f}")
 
                 with st.expander("Show raw data"):
                     st.dataframe(data)
