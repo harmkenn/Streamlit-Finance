@@ -16,7 +16,7 @@ with col2:
     end_date = st.date_input("End Date", datetime.today())
 with col3:
     # Ticker input
-    ticker = st.text_input("Enter Stock Ticker", "SOXL").upper()
+    ticker = st.text_input("Enter Stock Ticker", "TQQQ").upper()
 
 
 def calculate_rsi(data, window=14):
@@ -78,9 +78,18 @@ if ticker:
                 data = calculate_mfi(data)
                 data = calculate_atr(data)
                 data = calculate_volatility(data)
+                data = data.drop(columns=['Dividends', 'Stock Splits', 'Capital Gains'])
+                data['Open▲'] = data['Open'] - data['Close'].shift(1)
+                data['Open%'] = (data['Open'] / data['Close'].shift(1) - 1)*100
+                data['High▲'] = data['High'] - data['Close'].shift(1)
+                data['High%'] = (data['High'] / data['Close'].shift(1) - 1)*100   
+                data['Low▲'] = data['Low'] - data['Close'].shift(1)
+                data['Low%'] = (data['Low'] / data['Close'].shift(1) - 1)*100
+                data['Close▲'] = data['Close'] - data['Close'].shift(1)
+                data['Close%'] = (data['Close'] / data['Close'].shift(1) - 1)*100
 
-                current_price = data['Close'][-1]
-
+                # Get current price
+                current_price = data['Close'].iloc[-1]
                 # Display final RSI, MFI, ATR, and Volatility
                 with col1:
                     st.write(
@@ -96,6 +105,9 @@ if ticker:
                     st.write(
                         f"Volatility (30-day) for {ticker}: {data['Volatility'].iloc[-1]:.2f} ({(data['Volatility'].iloc[-1] / current_price * 100):.2f}%)"
                     )
+                with col3:
+                    st.write(f"High: {float(data['High'].max()):.2f}")
+                    st.write(f"Low: {float(data['Low'].min()):.2f}")
 
                 fig = go.Figure()
 
@@ -131,32 +143,25 @@ if ticker:
                 st.plotly_chart(fig)
 
                 st.subheader("Key Statistics")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric(
-                        "High", data['High'].max().round(2)
-                        if not data.empty else "N/A")
-                    st.metric(
-                        "Current Price",
-                        current_price.round(2) if not data.empty else "N/A")
-                    st.metric(
-                        "Low", data['Low'].min().round(2)
-                        if not data.empty else "N/A")
+                col1, col2, col3, col4 = st.columns(4)
 
+                with col1: 
+                    st.write(f"Ave Open▲: ${float(data['Open▲'].mean()):.2f}")
+                    st.write(f"Ave Open%: {float(data['Open%'].mean()):.2f}%")
                 with col2:
-                    st.metric(
-                        "Volatility (ATR, 14-day)",
-                        f"{data['ATR'].iloc[-1]:.2f} ({(data['ATR'].iloc[-1] / current_price * 100):.2f}%)"
-                    )
+                    st.write(f"Ave High▲: ${float(data['High▲'].mean()):.2f}")
+                    st.write(f"Ave High%: {float(data['High%'].mean()):.2f}%")
+
                 with col3:
+                    st.write(f"Ave Low▲: ${float(data['Low▲'].mean()):.2f}")
+                    st.write(f"Ave Low%: {float(data['Low%'].mean()):.2f}%")
+                    
+                with col4:
+                    st.write(f"Ave Close▲: ${float(data['Close▲'].mean()):.2f}")
+                    st.write(f"Ave Close%: {float(data['Close%'].mean()):.2f}%")
 
-                    st.metric(
-                        "Volatility (30-day)",
-                        f"{data['Volatility'].iloc[-1]:.2f} ({(data['Volatility'].iloc[-1] / current_price * 100):.2f}%)"
-                    )
-
-                with st.expander("Show raw data"):
-                    st.dataframe(data)
+                with st.expander("Show raw data"):                
+                    st.dataframe(data.iloc[::-1])
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
