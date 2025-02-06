@@ -13,7 +13,8 @@ sub_app_names = {
     'etradehunt.py': 'Etrade Hunt',
     'SOXLplan.py': 'SOXL Plan',
     'TQQQplan.py': 'TQQQ Plan',
-    'OptionWeek.py': 'Option Week'
+    'OptionWeek.py': 'Option Week',
+    'ExtendedSOXL.py': 'SOXL Extended Hours'
 }
 
 # Get a list of .py files from the SubApps folder
