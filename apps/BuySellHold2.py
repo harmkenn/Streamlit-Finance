@@ -1,41 +1,22 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 import plotly.graph_objects as go
-from numpy import sqrt, maximum, minimum
-import datetime as dt
+from datetime import datetime, timedelta
 
-# Set up the Streamlit interface
-st.title("Buy Sell Hold Strategy")
- 
-# Set the ticker symbol
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    ticker = st.selectbox("Select Ticker", ['SCHG','EDEN','INCO','KBWP','SMIN','SOXL','SPXL','SSO','TECL','TQQQ','UPRO'])
-with c2:
-    bound = st.number_input("Bound", min_value=0.0, max_value=10.0, value=1.1, step=0.1)
-with c4:
-    start_date = st.date_input("Select start date", value=dt.date(2020, 1, 1), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())  # replace with your desired start date
-    end_date = st.date_input("Select end date", value=dt.date.today(), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())  # replace with your desired start date
+st.title("Stock OHLC Plot with Moving Averages")
 
-# Fetch historical data for the past year
-data = yf.download(ticker, start=start_date, end=end_date, interval='1d')
+# Date inputs
+col1, col2, col3 = st.columns(3)
+with col1:
+    start_date = st.date_input("Start Date",
+                               datetime.today() - timedelta(days=5 * 365))
+with col2:
+    end_date = st.date_input("End Date", datetime.today())
+with col3:
+    # Ticker input
+    ticker = st.text_input("Enter Stock Ticker", "TQQQ").upper()
 
 
-# Calculate moving averages
-data['50_MA'] = data['Close'].rolling(window=50).mean()
-data['50_SD'] = data['Close'].rolling(window=50).std()
-data['200_MA'] = data['Close'].rolling(window=200).mean()
-data['UB'] = maximum(data['50_MA'], data['200_MA']) + data['50_SD'] * bound
-data['LB'] = minimum(data['50_MA'], data['200_MA']) - data['50_SD'] * bound
-
-# Calculate annual returns
-data['Returns'] = data['Close'].pct_change() * 100
-
-# Calculate Standard Deviation
-std_dev = data['Returns'].std() * sqrt(252)
-
-# Calculate RSI
 def calculate_rsi(data, window=14):
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
@@ -44,65 +25,143 @@ def calculate_rsi(data, window=14):
     data['RSI'] = 100 - (100 / (1 + rs))
     return data
 
-data = calculate_rsi(data)
 
-# Calculate MFI
 def calculate_mfi(data, window=14):
     typical_price = (data['High'] + data['Low'] + data['Close']) / 3
     money_flow = typical_price * data['Volume']
-    positive_flow = (money_flow.where(typical_price > typical_price.shift(1), 0)).rolling(window=window).sum()
-    negative_flow = (money_flow.where(typical_price < typical_price.shift(1), 0)).rolling(window=window).sum()
+    positive_flow = (money_flow.where(typical_price > typical_price.shift(1),
+                                      0)).rolling(window=window).sum()
+    negative_flow = (money_flow.where(typical_price < typical_price.shift(1),
+                                      0)).rolling(window=window).sum()
     money_flow_index = 100 - (100 / (1 + (positive_flow / negative_flow)))
     data['MFI'] = money_flow_index
     return data
 
-data = calculate_mfi(data)
 
-# Display final RSI and MFI
-with c1:
-    st.write(f"Final RSI (30,70) for {ticker}: {data['RSI'].iloc[-1]:.2f}")
-    st.write(f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}")
+def calculate_volatility(data, window=30):
+    data['Daily Return'] = data['Close'].pct_change()
+    data['Volatility'] = data['Daily Return'].rolling(window=window).std() * (
+        252**0.5)  # Annualized volatility
+    return data
 
-# Display Standard Deviation and Buy/Sell levels
-with c2:
-    st.write(f"Standard Deviation for {ticker}: {std_dev:.2f}%")
-with c3:
-    st.write(f'Sell at: {data["UB"].iloc[-1]:.2f}')
-    st.write(f'High: {float(data["High"].iloc[-1]):.2f}')
-    st.write(f'Low: {float(data["Low"].iloc[-1]):.2f}')
-    st.write(f'Buy at: {data["LB"].iloc[-1]:.2f}')
 
-# Drop the first 200 rows
-data = data.iloc[200:].copy()
+def calculate_atr(data, window=14):
+    data['HL'] = data['High'] - data['Low']
+    data['HC'] = abs(data['High'] - data['Close'].shift())
+    data['LC'] = abs(data['Low'] - data['Close'].shift())
+    data['TR'] = data[['HL', 'HC', 'LC']].max(axis=1)
+    data['ATR'] = data['TR'].rolling(window=window).mean()
+    return data
 
-# Create the OHLC chart
-fig = go.Figure()
 
-# Add OHLC data
-fig.add_trace(go.Ohlc(x=data.index.date, open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='OHLC'))
+if ticker:
+    if start_date > end_date:
+        st.error("Error: Start date must be before end date.")
+    else:
+        try:
+            stock = yf.Ticker(ticker)
+            data = stock.history(start=start_date, end=end_date, interval='1h', prepost=True)
 
-# Add moving averages
-fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50-Day MA', line=dict(color='blue', width=1)))
-fig.add_trace(go.Scatter(x=data.index, y=data['200_MA'], mode='lines', name='200-Day MA', line=dict(color='red', width=1)))
-fig.add_trace(go.Scatter(x=data.index, y=data['UB'], mode='lines', name='Sell Line', line=dict(color='green', width=1, dash='dash')))
-fig.add_trace(go.Scatter(x=data.index, y=data['LB'], mode='lines', name='Buy Line', line=dict(color='purple', width=1, dash='dash')))
+            if data.empty:
+                st.error(
+                    f"No data found for {ticker} within the selected date range."
+                )
+            else:
+                # Calculate moving averages
+                data['50-day MA'] = data['Close'].rolling(window=50).mean()
+                data['200-day MA'] = data['Close'].rolling(window=200).mean()
 
-# Update layout
-fig.update_layout(title=f'OHLC Chart for {ticker} with 50 & 200 Day Moving Averages',
-                  xaxis_title='Date',
-                  yaxis_title='Price',
-                  xaxis_rangeslider_visible=True)
+                # Calculate RSI, MFI, ATR, and Volatility
+                data = calculate_rsi(data)
+                data = calculate_mfi(data)
+                data = calculate_atr(data)
+                data = calculate_volatility(data)
+                data = data.drop(columns=['Dividends', 'Stock Splits', 'Capital Gains'])
+                data['Open▲'] = data['Open'] - data['Close'].shift(1)
+                data['Open%'] = (data['Open'] / data['Close'].shift(1) - 1)*100
+                data['High▲'] = data['High'] - data['Close'].shift(1)
+                data['High%'] = (data['High'] / data['Close'].shift(1) - 1)*100   
+                data['Low▲'] = data['Low'] - data['Close'].shift(1)
+                data['Low%'] = (data['Low'] / data['Close'].shift(1) - 1)*100
+                data['Close▲'] = data['Close'] - data['Close'].shift(1)
+                data['Close%'] = (data['Close'] / data['Close'].shift(1) - 1)*100
 
-# Streamlit app layout
-st.plotly_chart(fig)
+                # Get current price
+                current_price = data['Close'].iloc[-1]
+                # Display final RSI, MFI, ATR, and Volatility
+                with col1:
+                    st.write(
+                        f"Final RSI (30,70) for {ticker}: {data['RSI'].iloc[-1]:.2f}"
+                    )
+                    st.write(
+                        f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}"
+                    )
+                with col2:
+                    st.write(
+                        f"Volatility (ATR, 14-day) for {ticker}: {data['ATR'].iloc[-1]:.2f} ({(data['ATR'].iloc[-1] / current_price * 100):.2f}%)"
+                    )
+                    st.write(
+                        f"Volatility (30-day) for {ticker}: {data['Volatility'].iloc[-1]:.2f} ({(data['Volatility'].iloc[-1] / current_price * 100):.2f}%)"
+                    )
+                with col3:
+                    st.write(f"High: {float(data['High'].max()):.2f}")
+                    st.write(f"Low: {float(data['Low'].min()):.2f}")
 
-#data = data.drop(columns=["Adj Close", "Volume"], inplace=True)
-st.dataframe(data.iloc[::-1], width=None, use_container_width=True)
+                fig = go.Figure()
 
-# Download button for the dataframe
-st.download_button(
-    label="Download Data as CSV",
-    data=data.to_csv().encode("utf-8"),
-    file_name=f"{ticker}_data.csv",
-    mime="text/csv",
-)
+                # Add candlestick trace
+                fig.add_trace(
+                    go.Candlestick(x=data.index,
+                                   open=data['Open'],
+                                   high=data['High'],
+                                   low=data['Low'],
+                                   close=data['Close'],
+                                   name="OHLC"))
+
+                # Add moving average traces
+                fig.add_trace(
+                    go.Scatter(x=data.index,
+                               y=data['50-day MA'],
+                               mode='lines',
+                               name='50-day MA',
+                               line=dict(color='blue')))
+                fig.add_trace(
+                    go.Scatter(x=data.index,
+                               y=data['200-day MA'],
+                               mode='lines',
+                               name='200-day MA',
+                               line=dict(color='red')))
+
+                fig.update_layout(
+                    title=f"{ticker} OHLC Chart ({start_date} - {end_date})",
+                    xaxis_title="Date",
+                    yaxis_title="Price",
+                    xaxis_rangeslider_visible=False)
+
+                st.plotly_chart(fig)
+
+                st.subheader("Key Statistics")
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1: 
+                    st.write(f"Ave Open▲: ${float(data['Open▲'].mean()):.2f}")
+                    st.write(f"Ave Open%: {float(data['Open%'].mean())::.2f}%")
+                with col2:
+                    st.write(f"Ave High▲: ${float(data['High▲'].mean()):.2f}")
+                    st.write(f"Ave High%: {float(data['High%'].mean()):.2f}%")
+
+                with col3:
+                    st.write(f"Ave Low▲: ${float(data['Low▲'].mean()):.2f}")
+                    st.write(f"Ave Low%: {float(data['Low%'].mean()):.2f}%")
+
+                with col4:
+                    st.write(f"Ave Close▲: ${float(data['Close▲'].mean()):.2f}")
+                    st.write(f"Ave Close%: {float(data['Close%'].mean()):.2f}%")
+
+                with st.expander("Show raw data"):                
+                    st.dataframe(data.iloc[::-1])
+
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+else:
+    st.info("Please enter a stock ticker symbol.")
