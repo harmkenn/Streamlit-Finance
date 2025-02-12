@@ -53,7 +53,7 @@ def main():
             st.metric("Daily Low", f"${daily_low:.2f}")
             
         with st.expander("Show Raw Data"):
-            st.dataframe(data.sort_values('Datetime', ascending=False))
+            st.dataframe(data.sort_values('Datetime', ascending=False)) 
 
 if __name__ == "__main__":
     main()
