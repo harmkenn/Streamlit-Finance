@@ -1,37 +1,17 @@
 import streamlit as st
 import yfinance as yf
-from datetime import datetime, timedelta
-import time
 import pandas as pd
 
-st.title("Stock Earnings and Options Calendar")
+# Function to fetch stock data
+def get_stock_data(ticker):
+    stock = yf.Ticker(ticker)
+    return stock.option_chain('all')
 
-st.header("Enter a stock ticker:")
-
-ticker = st.text_input("Ticker", value="AAPL")
-
-if ticker:
-    time.sleep(1)  # wait for 1 second before making the request
-    data = yf.Ticker(ticker)
-
-    # Get earnings dates for the next 12 months
-    earnings_dates = []
-    for calendar_item in data.calendar:
-        if "Dividend Date:" in calendar_item:
-            date_str = calendar_item.split(":")[1].strip()
-            date = pd.to_datetime(date_str)
-            earnings_dates.append(date)
-
-    # Get option expiration dates for the next 12 months
-    options_dates = []
-    for date in data.options:
-        if date > datetime.today() and date < datetime.today() + timedelta(days=365):
-            options_dates.append(date)
-
-    st.header("Earnings Dates:")
-    for date in earnings_dates:
-        st.write(date.strftime("%Y-%m-%d"))
-
-    st.header("Option Expiration Dates:")
-    for date in options_dates:
-        st.write(date.strftime("%Y-%m-%d"))
+# Streamlit app
+st.title("Option Sell Dates for Next 12 Months")
+ticker = st.text_input("Enter Stock Ticker")
+if st.button("Fetch Options"):
+    stock_data = get_stock_data(ticker)
+    # Process and display the data
+    # (You'll need to add logic to filter and display the sell dates for the next 12 months)
+    st.write(stock_data)
