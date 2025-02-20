@@ -16,9 +16,10 @@ if ticker:
 
     # Get earnings dates for the next 12 months
     earnings_dates = []
-    for date_str in data.calendar:
-        date = pd.to_datetime(date_str)
-        if date > datetime.today() and date < datetime.today() + timedelta(days=365):
+    for calendar_item in data.calendar:
+        if "Dividend Date:" in calendar_item:
+            date_str = calendar_item.split(":")[1].strip()
+            date = pd.to_datetime(date_str)
             earnings_dates.append(date)
 
     # Get option expiration dates for the next 12 months
