@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 from datetime import datetime, timedelta
 import time
+import pandas as pd
 
 st.title("Stock Earnings and Options Calendar")
 
@@ -15,7 +16,8 @@ if ticker:
 
     # Get earnings dates for the next 12 months
     earnings_dates = []
-    for date in data.calendar:
+    for date_str in data.calendar:
+        date = pd.to_datetime(date_str)
         if date > datetime.today() and date < datetime.today() + timedelta(days=365):
             earnings_dates.append(date)
 
