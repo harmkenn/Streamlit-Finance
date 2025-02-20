@@ -9,7 +9,7 @@ st.set_page_config(layout="wide", page_title=f"Finance")
 sub_app_names = {
     'BuySellHold.py': 'Buy Sell or Hold',
     'BuySellHold2.py': 'Buy Sell or Hold 2',
-    'HoldVsTrade.py': 'Hold vs. Trade',
+    'ExtendedSOXL.py': 'Extended_SOXL',
     'etradehunt.py': 'Etrade Hunt',
     'SOXLplan.py': 'SOXL Plan',
     'TQQQplan.py': 'TQQQ Plan',
