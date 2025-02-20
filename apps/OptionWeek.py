@@ -10,6 +10,9 @@ def get_earnings_dates(ticker):
     # Convert to DataFrame for easier manipulation
     earnings_df = pd.DataFrame(earnings_dates).reset_index()
     
+    # Convert 'Earnings Date' to datetime and handle timezone issues
+    earnings_df['Earnings Date'] = pd.to_datetime(earnings_df['Earnings Date']).dt.tz_localize(None)
+    
     # Filter earnings dates within the next 12 months
     current_date = pd.to_datetime("today")
     future_dates = earnings_df[earnings_df['Earnings Date'] > current_date]
