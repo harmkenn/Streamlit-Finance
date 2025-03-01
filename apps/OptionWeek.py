@@ -74,6 +74,8 @@ st.write("Enter a stock ticker symbol to get earnings, options expiration, and d
 # Input for the stock ticker
 ticker_input = st.text_input("Stock Ticker (e.g. AAPL, TSLA)")
 
+
+
 if ticker_input:
     # Get earnings dates for the input ticker
     try:
@@ -81,26 +83,30 @@ if ticker_input:
         options_dates = get_options_dates(ticker_input)
         dividend_dates = get_dividend_dates(ticker_input)
         
+        col1, col2, col3 = st.columns(3)
         # Display earnings dates
-        if not earnings_dates.empty:
-            st.write(f"Earnings Dates for {ticker_input} in the next 12 months:")
-            st.write(earnings_dates)
-        else:
-            st.write(f"No earnings dates found for {ticker_input} in the next 12 months.")
+        with col1:
+            if not earnings_dates.empty:
+                st.write(f"Earnings Dates for {ticker_input} in the next 12 months:")
+                st.write(earnings_dates)
+            else:
+                st.write(f"No earnings dates found for {ticker_input} in the next 12 months.")
         
         # Display options expiration dates
-        if not options_dates.empty:
-            st.write(f"Options Expiration Dates for {ticker_input} in the next 12 months:")
-            st.write(options_dates)
-        else:
-            st.write(f"No options expiration dates found for {ticker_input} in the next 12 months.")
+        with col2:
+            if not options_dates.empty:
+                st.write(f"Options Expiration Dates for {ticker_input} in the next 12 months:")
+                st.write(options_dates)
+            else:
+                st.write(f"No options expiration dates found for {ticker_input} in the next 12 months.")
 
         # Display dividend dates
-        if not dividend_dates.empty:
-            st.write(f"Dividend Pay Dates for {ticker_input} in the next 12 months:")
-            st.write(dividend_dates)
-        else:
-            st.write(f"No dividend pay dates found for {ticker_input} in the next 12 months.")
+        with col3:
+            if not dividend_dates.empty:
+                st.write(f"Dividend Pay Dates for {ticker_input} in the next 12 months:")
+                st.write(dividend_dates)
+            else:
+                st.write(f"No dividend pay dates found for {ticker_input} in the next 12 months.")
     
     except Exception as e:
         st.write(f"Error fetching data for {ticker_input}: {str(e)}")
