@@ -7,14 +7,10 @@ def get_earnings_dates(ticker):
     stock = yf.Ticker(ticker)
     try:
         earnings_dates = stock.earnings_dates
-        # Convert to DataFrame for easier manipulation
         earnings_df = pd.DataFrame(earnings_dates).reset_index()
-        # Convert 'Earnings Date' to datetime and handle timezone issues
         earnings_df['Earnings Date'] = pd.to_datetime(earnings_df['Earnings Date']).dt.tz_localize(None)
-        # Filter earnings dates within the next 12 months
         current_date = pd.to_datetime("today")
         future_dates = earnings_df[earnings_df['Earnings Date'] > current_date]
-        # Only keep earnings dates for the next 12 months
         future_12_months = future_dates[future_dates['Earnings Date'] <= current_date + pd.DateOffset(months=12)]
         return future_12_months[['Earnings Date']]
     except Exception:
@@ -36,26 +32,25 @@ def get_options_dates(ticker):
     except Exception:
         return pd.DataFrame(columns=["Options Expiration Date"])
 
-# Function to get dividend pay dates for the next 12 months
-def get_dividend_dates(ticker):
+# Function to get dividend payout amounts and dates for the last 12 months
+def get_past_dividend_payments(ticker):
     stock = yf.Ticker(ticker)
     try:
         dividends = stock.dividends
         if dividends.empty:
-            return pd.DataFrame(columns=["Dividend Pay Date"])
+            return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount"])
         dividends_df = pd.DataFrame(dividends).reset_index()
-        dividends_df.rename(columns={'Date': 'Dividend Pay Date'}, inplace=True)
+        dividends_df.rename(columns={'Date': 'Dividend Pay Date', 'Dividends': 'Dividend Amount'}, inplace=True)
         dividends_df['Dividend Pay Date'] = pd.to_datetime(dividends_df['Dividend Pay Date']).dt.tz_localize(None)
         current_date = pd.to_datetime("today")
-        future_dates = dividends_df[dividends_df['Dividend Pay Date'] > current_date]
-        future_12_months = future_dates[future_dates['Dividend Pay Date'] <= current_date + pd.DateOffset(months=12)]
-        return future_12_months[['Dividend Pay Date']]
+        past_12_months = dividends_df[dividends_df['Dividend Pay Date'] >= current_date - pd.DateOffset(months=12)]
+        return past_12_months[['Dividend Pay Date', 'Dividend Amount']]
     except Exception:
-        return pd.DataFrame(columns=["Dividend Pay Date"])
+        return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount"])
 
 # Streamlit UI setup
-st.title("Stock Earnings, Options Expiration, and Dividend Dates")
-st.write("Enter a stock ticker symbol to get earnings, options expiration, and dividend dates for the next 12 months.")
+st.title("Stock Earnings, Options Expiration, and Dividend Data")
+st.write("Enter a stock ticker symbol to get earnings, options expiration, and past 12 months dividend data.")
 
 # Input for the stock ticker
 ticker_input = st.text_input("Stock Ticker (e.g. AAPL, TSLA)")
@@ -64,7 +59,7 @@ if ticker_input:
     # Get all dates
     earnings_dates = get_earnings_dates(ticker_input)
     options_dates = get_options_dates(ticker_input)
-    dividend_dates = get_dividend_dates(ticker_input)
+    dividend_data = get_past_dividend_payments(ticker_input)
 
     col1, col2, col3 = st.columns(3)
     # Display earnings dates
@@ -83,10 +78,10 @@ if ticker_input:
         else:
             st.write(f"No options expiration dates found for {ticker_input} in the next 12 months.")
 
-    # Display dividend dates
+    # Display dividend dates and amounts
     with col3:
-        if not dividend_dates.empty:
-            st.write(f"Dividend Pay Dates for {ticker_input} in the next 12 months:")
-            st.write(dividend_dates)
+        if not dividend_data.empty:
+            st.write(f"Dividend Payments for {ticker_input} in the last 12 months:")
+            st.write(dividend_data)
         else:
-            st.write(f"No dividend pay dates found for {ticker_input} in the next 12 months.")
+            st.write(f"No dividend payments found for {ticker_input} in the last 12 months.")
