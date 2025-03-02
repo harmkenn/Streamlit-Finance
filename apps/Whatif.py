@@ -40,7 +40,7 @@ def calculate_etf_value(ticker, initial_investment):
 
             daily_values[date] = current_shares * price
 
-        return f"The current value of your investment is: ${daily_values.iloc[-1]:.2f}", historical_prices, dividend_dates, pd.DataFrame({'Daily Value': daily_values, 'Dividend Payout': dividend_payouts})
+        return f"The current value of your investment is: ${daily_values.iloc[-1]:.2f}", historical_prices, dividend_dates, pd.DataFrame({'Stock Price': historical_prices, 'Daily Value': daily_values, 'Dividend Payout': dividend_payouts})
 
     except Exception as e:
         return f"An error occurred: {e}", None, None, None
@@ -71,9 +71,10 @@ if st.button("Calculate"):
 
             # Display daily values as a Pandas DataFrame with currency formatting
             if daily_data is not None:
-                st.write("Daily Investment Values and Dividend Payouts:")
+                st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
                 daily_data['Daily Value'] = daily_data['Daily Value'].apply(lambda x: "${:,.2f}".format(x))
                 daily_data['Dividend Payout'] = daily_data['Dividend Payout'].apply(lambda x: "${:,.2f}".format(x))
+                daily_data['Stock Price'] = daily_data['Stock Price'].apply(lambda x: "${:,.2f}".format(x))
 
                 st.dataframe(daily_data)
 
