@@ -48,9 +48,11 @@ def calculate_etf_value(ticker, initial_investment):
 # Streamlit app
 st.title("ETF Growth Calculator")
 st.write("Enter an ETF ticker symbol and initial investment to calculate its current value.")
-
-ticker = st.text_input("ETF Ticker Symbol (e.g., SPY, VOO, MSTY):")
-initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
+col1, col2 = st.columns(2)
+with col1:
+    ticker = st.text_input("ETF Ticker Symbol (e.g., SPY, VOO, MSTY):")
+with col2:
+    initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
 
 if st.button("Calculate"):
     if ticker:
