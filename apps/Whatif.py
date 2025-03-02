@@ -29,14 +29,14 @@ def calculate_etf_value(ticker, initial_investment):
         dividend_dates = []
         daily_values = pd.Series(index=historical_prices.index)
         current_shares = shares
-        dividend_payouts = pd.Series(index=historical_prices.index) #New series for dividend payouts
+        dividend_payouts = pd.Series(index=historical_prices.index)
 
         for date, price in historical_prices.items():
             if date in dividends and dividends[date] > 0:
                 dividend = dividends[date]
                 current_shares += (current_shares * dividend) / price
                 dividend_dates.append(date)
-                dividend_payouts[date] = shares*dividend #Record the dividend payout amount
+                dividend_payouts[date] = shares * dividend
 
             daily_values[date] = current_shares * price
 
@@ -69,9 +69,12 @@ if st.button("Calculate"):
 
             st.plotly_chart(fig)
 
-            # Display daily values as a Pandas DataFrame
+            # Display daily values as a Pandas DataFrame with currency formatting
             if daily_data is not None:
                 st.write("Daily Investment Values and Dividend Payouts:")
+                daily_data['Daily Value'] = daily_data['Daily Value'].apply(lambda x: "${:,.2f}".format(x))
+                daily_data['Dividend Payout'] = daily_data['Dividend Payout'].apply(lambda x: "${:,.2f}".format(x))
+
                 st.dataframe(daily_data)
 
     else:
