@@ -12,7 +12,7 @@ sub_app_names = {
     'ExtendedSOXL.py': 'Extended_SOXL',
     'etradehunt.py': 'Etrade Hunt',
     'SOXLplan.py': 'SOXL Plan',
-    'TQQQplan.py': 'TQQQ Plan',
+    'Whatif.py': 'Last Year',
     'OptionWeek.py': 'Option Week'
 }
 
