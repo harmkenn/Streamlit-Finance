@@ -29,16 +29,18 @@ def calculate_etf_value(ticker, initial_investment):
         dividend_dates = []
         daily_values = pd.Series(index=historical_prices.index)
         current_shares = shares
+        dividend_payouts = pd.Series(index=historical_prices.index) #New series for dividend payouts
 
         for date, price in historical_prices.items():
             if date in dividends and dividends[date] > 0:
                 dividend = dividends[date]
                 current_shares += (current_shares * dividend) / price
                 dividend_dates.append(date)
+                dividend_payouts[date] = shares*dividend #Record the dividend payout amount
 
             daily_values[date] = current_shares * price
 
-        return f"The current value of your investment is: ${daily_values.iloc[-1]:.2f}", historical_prices, dividend_dates, daily_values
+        return f"The current value of your investment is: ${daily_values.iloc[-1]:.2f}", historical_prices, dividend_dates, pd.DataFrame({'Daily Value': daily_values, 'Dividend Payout': dividend_payouts})
 
     except Exception as e:
         return f"An error occurred: {e}", None, None, None
@@ -52,12 +54,12 @@ initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
 
 if st.button("Calculate"):
     if ticker:
-        result, historical_prices, dividend_dates, daily_values = calculate_etf_value(ticker, initial_investment)
+        result, historical_prices, dividend_dates, daily_data = calculate_etf_value(ticker, initial_investment)
         st.write(result)
 
         if historical_prices is not None:
             # Create Plotly chart
-            fig = go.Figure(data=go.Scatter(x=daily_values.index, y=daily_values.values, mode='lines'))
+            fig = go.Figure(data=go.Scatter(x=daily_data.index, y=daily_data['Daily Value'], mode='lines'))
             fig.update_layout(title=f"{ticker} Investment Value Over Time", xaxis_title="Date", yaxis_title="Value ($)")
 
             # Add vertical lines for dividend dates
@@ -68,9 +70,9 @@ if st.button("Calculate"):
             st.plotly_chart(fig)
 
             # Display daily values as a Pandas DataFrame
-            if daily_values is not None:
-                st.write("Daily Investment Values:")
-                st.dataframe(daily_values)
+            if daily_data is not None:
+                st.write("Daily Investment Values and Dividend Payouts:")
+                st.dataframe(daily_data)
 
     else:
         st.write("Please enter an ETF ticker symbol.")
