@@ -26,7 +26,7 @@ def calculate_etf_value(ticker, initial_investment):
         shares = initial_investment / initial_price
 
         # Reinvest dividends
-        dividend_dates =
+        dividend_dates = []
         for date, dividend in dividends.items():
             if dividend > 0:
                 price_at_dividend = historical_prices.asof(date)
