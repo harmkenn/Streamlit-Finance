@@ -17,33 +17,31 @@ def calculate_etf_value(ticker, initial_investment):
         historical_prices = historical_data['Close']
 
         if historical_prices.empty:
-            return "No historical price data found for the given ticker.", None, None
+            return "No historical price data found for the given ticker.", None, None, None
         if dividends.empty:
-            return "No dividend data found.", None, None
+            return "No dividend data found.", None, None, None
 
         # Calculate initial shares
         initial_price = historical_prices.iloc[0]
         shares = initial_investment / initial_price
 
-        # Reinvest dividends
+        # Reinvest dividends and calculate daily values
         dividend_dates = []
-        for date, dividend in dividends.items():
-            if dividend > 0:
-                price_at_dividend = historical_prices.asof(date)
-                if pd.isna(price_at_dividend):
-                    price_at_dividend = historical_prices[historical_prices.index > date].iloc[0]
+        daily_values = pd.Series(index=historical_prices.index)
+        current_shares = shares
 
-                shares += (shares * dividend) / price_at_dividend
+        for date, price in historical_prices.items():
+            if date in dividends and dividends[date] > 0:
+                dividend = dividends[date]
+                current_shares += (current_shares * dividend) / price
                 dividend_dates.append(date)
 
-        # Calculate current value
-        current_price = historical_prices.iloc[-1]
-        current_value = shares * current_price
+            daily_values[date] = current_shares * price
 
-        return f"The current value of your investment is: ${current_value:.2f}", historical_prices, dividend_dates
+        return f"The current value of your investment is: ${daily_values.iloc[-1]:.2f}", historical_prices, dividend_dates, daily_values
 
     except Exception as e:
-        return f"An error occurred: {e}", None, None
+        return f"An error occurred: {e}", None, None, None
 
 # Streamlit app
 st.title("ETF Growth Calculator")
@@ -54,13 +52,13 @@ initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
 
 if st.button("Calculate"):
     if ticker:
-        result, historical_prices, dividend_dates = calculate_etf_value(ticker, initial_investment)
+        result, historical_prices, dividend_dates, daily_values = calculate_etf_value(ticker, initial_investment)
         st.write(result)
 
         if historical_prices is not None:
             # Create Plotly chart
-            fig = go.Figure(data=go.Scatter(x=historical_prices.index, y=historical_prices.values, mode='lines'))
-            fig.update_layout(title=f"{ticker} Historical Prices", xaxis_title="Date", yaxis_title="Price")
+            fig = go.Figure(data=go.Scatter(x=daily_values.index, y=daily_values.values, mode='lines'))
+            fig.update_layout(title=f"{ticker} Investment Value Over Time", xaxis_title="Date", yaxis_title="Value ($)")
 
             # Add vertical lines for dividend dates
             if dividend_dates is not None:
@@ -68,5 +66,11 @@ if st.button("Calculate"):
                     fig.add_vline(x=date, line_width=1, line_dash="dash", line_color="green")
 
             st.plotly_chart(fig)
+
+            # Display daily values as a Pandas DataFrame
+            if daily_values is not None:
+                st.write("Daily Investment Values:")
+                st.dataframe(daily_values)
+
     else:
         st.write("Please enter an ETF ticker symbol.")
