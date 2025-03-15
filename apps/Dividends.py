@@ -5,8 +5,6 @@ from datetime import datetime, timedelta
 
 st.title("Dividend Information App")
 
-st.header("Input Stock Ticker and Date Range")
-
 col1, col2, col3 = st.columns(3)
 with col1:
     start_date = st.date_input("Start Date", value=datetime.today() - timedelta(days=2 * 365))
