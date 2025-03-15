@@ -14,7 +14,7 @@ with col2:
     end_date = st.date_input("End Date", datetime.today())
 with col3:
     # Ticker input
-    ticker = st.text_input("Enter Stock Ticker", "TQQQ").upper()
+    ticker = st.text_input("Enter Stock Ticker", "MSTY").upper()
 
 if st.button("Get Dividend Information"):
     stock_data = yf.Ticker(ticker)
