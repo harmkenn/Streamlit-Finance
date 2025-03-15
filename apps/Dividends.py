@@ -1,17 +1,20 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+from datetime import datetime, timedelta
 
 st.title("Dividend Information App")
 
 st.header("Input Stock Ticker and Date Range")
-col1,col2,col3 = st.columns(3)
+col1, col2, col3 = st.columns(3)
 with col1:
-    ticker = st.text_input("Enter stock ticker:", value="AAPL")
+    start_date = st.date_input("Start Date",
+                               datetime.today() - timedelta(days=5 * 365))
 with col2:
-    start_date = st.date_input("Enter start date:", value=pd.to_datetime("2024-01-01"))
+    end_date = st.date_input("End Date", datetime.today())
 with col3:
-    end_date = st.date_input("Enter end date:", value=pd.to_datetime("today"))
+    # Ticker input
+    ticker = st.text_input("Enter Stock Ticker", "TQQQ").upper()
 
 if st.button("Get Dividend Information"):
     stock_data = yf.Ticker(ticker)
