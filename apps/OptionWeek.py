@@ -38,15 +38,22 @@ def get_past_dividend_payments(ticker):
     try:
         dividends = stock.dividends
         if dividends.empty:
-            return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount"])
+            return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount", "Dividend Yield"])
         dividends_df = pd.DataFrame(dividends).reset_index()
         dividends_df.rename(columns={'Date': 'Dividend Pay Date', 'Dividends': 'Dividend Amount'}, inplace=True)
         dividends_df['Dividend Pay Date'] = pd.to_datetime(dividends_df['Dividend Pay Date']).dt.tz_localize(None)
+        
+        # Get the current ETF price
+        current_price = stock.info['currentPrice']
+        
+        # Calculate the dividend yield
+        dividends_df['Dividend Yield'] = (dividends_df['Dividend Amount'] / current_price) * 100
+        
         current_date = pd.to_datetime("today")
         past_12_months = dividends_df[dividends_df['Dividend Pay Date'] >= current_date - pd.DateOffset(months=12)]
-        return past_12_months[['Dividend Pay Date', 'Dividend Amount']]
+        return past_12_months[['Dividend Pay Date', 'Dividend Amount', 'Dividend Yield']]
     except Exception:
-        return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount"])
+        return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount", "Dividend Yield"])
 
 # Streamlit UI setup
 st.title("Stock Earnings, Options Expiration, and Dividend Data")
@@ -82,6 +89,7 @@ if ticker_input:
     with col3:
         if not dividend_data.empty:
             st.write(f"Dividend Payments for {ticker_input} in the last 12 months:")
+            
             st.write(dividend_data)
         else:
             st.write(f"No dividend payments found for {ticker_input} in the last 12 months.")
