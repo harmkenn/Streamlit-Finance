@@ -16,14 +16,10 @@ with col3:
     # Ticker input
     ticker = st.text_input("Enter Stock Ticker", "MSTY").upper()
 
-if st.button("Get Dividend Information"):
-    stock_data = yf.Ticker(ticker)
-    dividends = stock_data.dividends[start_date:end_date]
-    if dividends is not None:
-        dividend_yield = stock_data.info["trailingAnnualDividendRate"]
-        dividend_df = pd.DataFrame(dividends).reset_index()
-        dividend_df.columns = ["Date", "Dividend Amount"]
-        dividend_df["Dividend Yield"] = dividend_yield
-        st.write(dividend_df)
-    else:
-        st.write("No dividend data available for the specified date range.")
+stock = yf.Ticker(ticker)
+historical_data = stock.history(start=start_date, end=end_date, actions=True)
+dividends = historical_data['Dividends']
+historical_prices = historical_data['Close']
+
+st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
+st.dataframe(historical_data)
