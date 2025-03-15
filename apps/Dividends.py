@@ -20,7 +20,7 @@ stock = yf.Ticker(ticker)
 historical_data = stock.history(start=start_date, end=end_date, actions=True)
 dividends = historical_data['Dividends']
 historical_prices = historical_data['Close']
-div_data = pd.DataFrame({'Dividend Payout': historical_data['Date']})
+div_data = historical_data
 
 
 st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
