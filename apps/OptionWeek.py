@@ -44,7 +44,8 @@ def get_past_dividend_payments(ticker):
         dividends_df['Dividend Pay Date'] = pd.to_datetime(dividends_df['Dividend Pay Date']).dt.tz_localize(None)
         current_date = pd.to_datetime("today")
         past_12_months = dividends_df[dividends_df['Dividend Pay Date'] >= current_date - pd.DateOffset(months=12)]
-        return past_12_months[['Dividend Pay Date', 'Dividend Amount']]
+        past_12_months['Dividend Yield'] = (past_12_months['Dividend Amount'] / past_12_months['Close']) * 100
+        return past_12_months[['Dividend Pay Date', 'Dividend Amount','Dividend Yield']]
     except Exception:
         return pd.DataFrame(columns=["Dividend Pay Date", "Dividend Amount"])
 
