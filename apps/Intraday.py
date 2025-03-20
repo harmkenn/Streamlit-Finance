@@ -4,11 +4,13 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 
 st.title("Intraday Stock Prices")
-
-stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):")
+col1, col2 = st.columns(2)
+with col1:
+    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):")
 
 if stock_symbol:
-    refresh_button = st.button("Refresh")
+    with col2:
+        refresh_button = st.button("Refresh")
 
     if refresh_button:
         ticker = yf.Ticker(stock_symbol)
