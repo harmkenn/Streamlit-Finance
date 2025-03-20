@@ -8,22 +8,47 @@ st.title("Intraday Stock Prices")
 stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):")
 
 if stock_symbol:
-    ticker = yf.Ticker(stock_symbol)
-    data = ticker.history(period="5d", interval="1m")
+    refresh_button = st.button("Refresh")
 
-    data = data.iloc[::-1]
+    if refresh_button:
+        ticker = yf.Ticker(stock_symbol)
+        data = ticker.history(period="5d", interval="1m")
 
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+        # Reverse the order of the data to get the newest row first
+        data = data.iloc[::-1]
 
-    fig.add_trace(px.line(data, x=data.index, y="Close").data[0], secondary_y=False)
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    fig.add_trace(px.bar(data, x=data.index, y="Volume").data[0], secondary_y=True)
+        fig.add_trace(px.line(data, x=data.index, y="Close").data[0], secondary_y=False)
 
-    fig.data[1].marker.color = 'red'
+        fig.add_trace(px.bar(data, x=data.index, y="Volume").data[0], secondary_y=True)
 
-    fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
-    fig.update_yaxes(title_text="Volume", secondary_y=True)
+        fig.data[1].marker.color = 'red'
 
-    st.plotly_chart(fig)
+        fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
+        fig.update_yaxes(title_text="Volume", secondary_y=True)
 
-    st.write(data)
+        st.plotly_chart(fig)
+
+        st.write(data)
+    else:
+        ticker = yf.Ticker(stock_symbol)
+        data = ticker.history(period="5d", interval="1m")
+
+        # Reverse the order of the data to get the newest row first
+        data = data.iloc[::-1]
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        fig.add_trace(px.line(data, x=data.index, y="Close").data[0], secondary_y=False)
+
+        fig.add_trace(px.bar(data, x=data.index, y="Volume").data[0], secondary_y=True)
+
+        fig.data[1].marker.color = 'red'
+
+        fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
+        fig.update_yaxes(title_text="Volume", secondary_y=True)
+
+        st.plotly_chart(fig)
+
+        st.write(data)
