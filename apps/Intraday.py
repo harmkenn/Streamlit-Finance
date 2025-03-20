@@ -13,10 +13,12 @@ if stock_symbol:
     fig = px.line(data, x=data.index, y="Close")
     fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
 
-    volume_fig = px.bar(data, x=data.index, y="Volume")
-    volume_fig.update_layout(title=f"{stock_symbol} Intraday Volume", xaxis_title="Time", yaxis_title="Volume")
+    volume_fig = px.bar(data, x=data.index, y="Volume", color_discrete_sequence=["red"])
+
+    fig.add_trace(volume_fig.data[0], secondary_y=True)
+
+    fig.update_layout(yaxis_title="Price", secondary_y_title="Volume", secondary_y=True)
 
     st.plotly_chart(fig)
-    st.plotly_chart(volume_fig)
 
     st.write(data)
