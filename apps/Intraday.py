@@ -17,6 +17,9 @@ if stock_symbol:
         # Reverse the order of the data to get the newest row first
         data = data.iloc[::-1]
 
+        # Select only the Close, Volume, and Dividends columns
+        data = data[["Close", "Volume", "Dividends"]]
+
         fig = make_subplots(specs=[[{"secondary_y": True}]])
 
         fig.add_trace(px.line(data, x=data.index, y="Close").data[0], secondary_y=False)
@@ -37,6 +40,9 @@ if stock_symbol:
 
         # Reverse the order of the data to get the newest row first
         data = data.iloc[::-1]
+
+        # Select only the Close, Volume, and Dividends columns
+        data = data[["Close", "Volume", "Dividends"]]
 
         fig = make_subplots(specs=[[{"secondary_y": True}]])
 
