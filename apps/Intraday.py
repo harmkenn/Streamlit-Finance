@@ -17,6 +17,8 @@ if stock_symbol:
 
     fig.add_trace(px.bar(data, x=data.index, y="Volume").data[0], secondary_y=True)
 
+    fig.data[1].marker.color = 'red'
+
     fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
     fig.update_yaxes(title_text="Volume", secondary_y=True)
 
