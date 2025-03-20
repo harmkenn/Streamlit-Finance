@@ -9,7 +9,7 @@ stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):")
 
 if stock_symbol:
     ticker = yf.Ticker(stock_symbol)
-    data = ticker.history(period="1d", interval="1m")
+    data = ticker.history(period="30d", interval="1m")
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
