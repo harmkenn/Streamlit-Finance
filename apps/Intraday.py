@@ -11,6 +11,8 @@ if stock_symbol:
     ticker = yf.Ticker(stock_symbol)
     data = ticker.history(period="5d", interval="1m")
 
+    data = data.iloc[::-1]
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig.add_trace(px.line(data, x=data.index, y="Close").data[0], secondary_y=False)
