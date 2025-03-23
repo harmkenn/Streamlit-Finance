@@ -18,6 +18,7 @@ pandas
 pip
 plotly
 plotly.express
+polygon-api-client
 pydataset
 pyephem
 pygeodesy
