@@ -2,6 +2,7 @@ import streamlit as st
 from polygon-api-client import RESTClient
 import plotly.express as px
 from plotly.subplots import make_subplots
+import pandas as pd
 
 st.title("Intraday Stock Prices")
 col1, col2 = st.columns(2)
