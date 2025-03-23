@@ -1,6 +1,5 @@
 import streamlit as st
-import alpha_vantage
-from alpha_vantage.timeseries import TimeSeries
+from polygon-api-client import RESTClient
 import plotly.express as px
 from plotly.subplots import make_subplots
 
@@ -14,40 +13,46 @@ if stock_symbol:
         refresh_button = st.button("Refresh")
 
     if refresh_button:
-        ts = TimeSeries(key='V8RWD2L3WZMPFALK', output_format='pandas')
-        data, meta_data = ts.get_intraday(symbol=stock_symbol, interval='1min', outputsize='full')
+        client = RESTClient(api_key='YOUR_POLYGON_API_KEY')
+        data = client.get_aggs(symbol=stock_symbol, multiplier=1, timespan='minute', from_='2023-02-20', to='2023-02-20')
+
+        # Convert data to pandas DataFrame
+        df = pd.DataFrame(data.results)
 
         # Reverse the order of the data to get the newest row first
-        data = data.iloc[::-1]
+        df = df.iloc[::-1]
 
         # Select only the Close, Volume, and Dividends columns
-        data = data[["4. close", "5. volume", "7. dividend amount"]]
+        df = df[["c", "v", "d"]]
 
         fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(px.line(data, x=data.index, y="4. close").data[0], secondary_y=False)
-        fig.add_trace(px.bar(data, x=data.index, y="5. volume").data[0], secondary_y=True)
+        fig.add_trace(px.line(df, x=df.index, y="c").data[0], secondary_y=False)
+        fig.add_trace(px.bar(df, x=df.index, y="v").data[0], secondary_y=True)
         fig.data[1].marker.color = 'red'
         fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
         fig.update_yaxes(title_text="Volume", secondary_y=True)
 
         st.plotly_chart(fig)
-        st.write(data)
+        st.write(df)
     else:
-        ts = TimeSeries(key='YOUR_ALPHA_VANTAGE_API_KEY', output_format='pandas')
-        data, meta_data = ts.get_intraday(symbol=stock_symbol, interval='1min', outputsize='full')
+        client = RESTClient(api_key='4UQbILKSeObAjCKlDdhDFWJ7CzVFYm4bEY')
+        data = client.get_aggs(symbol=stock_symbol, multiplier=1, timespan='minute', from_='2023-02-20', to='2023-02-20')
+
+        # Convert data to pandas DataFrame
+        df = pd.DataFrame(data.results)
 
         # Reverse the order of the data to get the newest row first
-        data = data.iloc[::-1]
+        df = df.iloc[::-1]
 
         # Select only the Close, Volume, and Dividends columns
-        data = data[["4. close", "5. volume", "7. dividend amount"]]
+        df = df[["c", "v", "d"]]
 
         fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(px.line(data, x=data.index, y="4. close").data[0], secondary_y=False)
-        fig.add_trace(px.bar(data, x=data.index, y="5. volume").data[0], secondary_y=True)
+        fig.add_trace(px.line(df, x=df.index, y="c").data[0], secondary_y=False)
+        fig.add_trace(px.bar(df, x=df.index, y="v").data[0], secondary_y=True)
         fig.data[1].marker.color = 'red'
         fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
         fig.update_yaxes(title_text="Volume", secondary_y=True)
 
         st.plotly_chart(fig)
-        st.write(data)
+        st.write(df)
