@@ -1,59 +1,43 @@
 import streamlit as st
-from polygon-api-client import RESTClient
+import yfinance as yf
 import plotly.express as px
 from plotly.subplots import make_subplots
-import pandas as pd
 
 st.title("Intraday Stock Prices")
-col1, col2 = st.columns(2)
-with col1:
-    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):","NVDY")
+
+# User input for stock symbol
+stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDA").upper()
 
 if stock_symbol:
-    with col2:
-        refresh_button = st.button("Refresh")
+    try:
+        # Fetch stock data
+        ticker = yf.Ticker(stock_symbol)
+        data = ticker.history(period="5d", interval="1m")
 
-    if refresh_button:
-        client = RESTClient(api_key='YOUR_POLYGON_API_KEY')
-        data = client.get_aggs(symbol=stock_symbol, multiplier=1, timespan='minute', from_='2023-02-20', to='2023-02-20')
+        if data.empty:
+            st.error(f"No data found for {stock_symbol}. Please check the symbol and try again.")
+        else:
+            # Keep the newest row first
+            data = data.iloc[::-1]
 
-        # Convert data to pandas DataFrame
-        df = pd.DataFrame(data.results)
+            # Select relevant columns
+            data = data[["Close", "Volume"]]
 
-        # Reverse the order of the data to get the newest row first
-        df = df.iloc[::-1]
+            # Create subplots for price and volume
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig.add_trace(px.line(data, x=data.index, y="Close").data[0], secondary_y=False)
+            fig.add_trace(px.bar(data, x=data.index, y="Volume").data[0], secondary_y=True)
 
-        # Select only the Close, Volume, and Dividends columns
-        df = df[["c", "v", "d"]]
+            # Style updates
+            fig.data[1].marker.color = 'red'
+            fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
+            fig.update_yaxes(title_text="Volume", secondary_y=True)
 
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(px.line(df, x=df.index, y="c").data[0], secondary_y=False)
-        fig.add_trace(px.bar(df, x=df.index, y="v").data[0], secondary_y=True)
-        fig.data[1].marker.color = 'red'
-        fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
-        fig.update_yaxes(title_text="Volume", secondary_y=True)
+            # Display chart
+            st.plotly_chart(fig)
 
-        st.plotly_chart(fig)
-        st.write(df)
-    else:
-        client = RESTClient(api_key='4UQbILKSeObAjCKlDdhDFWJ7CzVFYm4bEY')
-        data = client.get_aggs(symbol=stock_symbol, multiplier=1, timespan='minute', from_='2023-02-20', to='2023-02-20')
+            # Show raw data
+            st.write(data)
 
-        # Convert data to pandas DataFrame
-        df = pd.DataFrame(data.results)
-
-        # Reverse the order of the data to get the newest row first
-        df = df.iloc[::-1]
-
-        # Select only the Close, Volume, and Dividends columns
-        df = df[["c", "v", "d"]]
-
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        fig.add_trace(px.line(df, x=df.index, y="c").data[0], secondary_y=False)
-        fig.add_trace(px.bar(df, x=df.index, y="v").data[0], secondary_y=True)
-        fig.data[1].marker.color = 'red'
-        fig.update_layout(title=f"{stock_symbol} Intraday Prices", xaxis_title="Time", yaxis_title="Price")
-        fig.update_yaxes(title_text="Volume", secondary_y=True)
-
-        st.plotly_chart(fig)
-        st.write(df)
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
