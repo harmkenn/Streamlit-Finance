@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 st.title("Intraday Stock Prices")
 col1, col2 = st.columns(2)
 with col1:
-    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):")
+    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):","NVDY")
 
 if stock_symbol:
     with col2:
