@@ -7,7 +7,7 @@ import pandas as pd
 st.title("Intraday Stock Prices (Including Pre-market & After-hours)")
 
 # User input for stock symbol
-stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDA").upper()
+stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDY").upper()
 
 if stock_symbol:
     try:
