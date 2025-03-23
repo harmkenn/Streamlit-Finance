@@ -66,11 +66,5 @@ if stock_symbol:
             # Show raw data
             st.write(data[["Close", "Volume"]])
 
-            # Wait for 5 minutes before rerunning the script
-            time.sleep(300)  # Sleep for 5 minutes (300 seconds)
-
-            # Automatically rerun the Streamlit script
-            st.experimental_rerun()
-
     except Exception as e:
         st.error(f"Error fetching data: {e}")
