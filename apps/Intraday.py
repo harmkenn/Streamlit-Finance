@@ -64,7 +64,7 @@ if stock_symbol:
             st.plotly_chart(fig)
 
             # Show raw data
-            data = data[::]
+            data = data[::-1]
             st.write(data[["Close", "Volume"]])
 
     except Exception as e:
