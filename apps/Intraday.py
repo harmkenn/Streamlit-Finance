@@ -3,12 +3,16 @@ import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+import time
+from datetime import datetime
 
 st.title("Intraday Stock Prices (Including Pre-market & After-hours)")
 
 # User input for stock symbol
-stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDY").upper()
-
+col1, col2 = st.columns(2)
+with col1:
+    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDY").upper()
+    
 if stock_symbol:
     try:
         # Fetch stock data (5-minute interval for 5 days to capture extended hours)
@@ -18,6 +22,12 @@ if stock_symbol:
         if data.empty:
             st.error(f"No data found for {stock_symbol}. Please check the symbol and try again.")
         else:
+            with col2:
+                # Get the latest closing price (most recent data point)
+                latest_price = data["Close"].iloc[-1]
+                
+                # Display the current price at the top of the page
+                st.markdown(f"### Current Price: ${latest_price:.2f}")
             # Convert timestamps to Eastern Time
             data = data.tz_convert("America/New_York")
 
@@ -55,6 +65,12 @@ if stock_symbol:
 
             # Show raw data
             st.write(data[["Close", "Volume"]])
+
+            # Wait for 5 minutes before rerunning the script
+            time.sleep(300)  # Sleep for 5 minutes (300 seconds)
+
+            # Automatically rerun the Streamlit script
+            st.experimental_rerun()
 
     except Exception as e:
         st.error(f"Error fetching data: {e}")
