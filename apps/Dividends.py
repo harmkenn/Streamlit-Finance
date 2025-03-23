@@ -24,6 +24,7 @@ historical_prices = historical_data['Close']
 div_data = historical_data[['Close', 'Dividends']].copy()
 div_data['Dividend Yield'] = (div_data['Dividends'] / div_data['Close']) * 100
 div_data = div_data[div_data['Dividends'] != 0]
+div_data = div_data.iloc[::-1]
 
 st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
 st.dataframe(div_data)
