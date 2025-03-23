@@ -47,10 +47,17 @@ if stock_symbol:
             # Create subplots for price and volume
             fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # Plot each session with a distinct color
+            # Plot each session with a distinct color (without gaps)
             for session, color in session_colors.items():
                 session_data = data[data["Session"] == session]
-                fig.add_trace(go.Scatter(x=session_data.index, y=session_data["Close"], mode="lines", name=session, line=dict(color=color)), secondary_y=False)
+                fig.add_trace(go.Scatter(
+                    x=session_data.index,
+                    y=session_data["Close"],
+                    mode="lines",
+                    name=session,
+                    line=dict(color=color),
+                    connectgaps=False  # Prevents lines from connecting different sessions
+                ), secondary_y=False)
 
             # Volume as grey bars
             fig.add_trace(go.Bar(x=data.index, y=data["Volume"], name="Volume", marker=dict(color="grey")), secondary_y=True)
