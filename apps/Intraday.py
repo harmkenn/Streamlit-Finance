@@ -3,15 +3,17 @@ import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
-import time
 from datetime import datetime
 
 st.title("Intraday Stock Prices (Including Pre-market & After-hours)")
 
 # User input for stock symbol
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDY").upper()
+
+with col3:
+    refresh_button = st.button("Refresh")
     
 if stock_symbol:
     try:
@@ -66,6 +68,10 @@ if stock_symbol:
             # Show raw data
             data = data[::-1]
             st.write(data[["Close", "Volume"]])
+
+            # Refresh button logic
+            if refresh_button:
+                st.experimental_rerun()
 
     except Exception as e:
         st.error(f"Error fetching data: {e}")
