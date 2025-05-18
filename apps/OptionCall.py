@@ -6,7 +6,7 @@ import pandas as pd
 st.title("Option Calls App")
 
 # Create an input field for the stock ticker
-stock_ticker = st.text_input("Enter Stock Ticker (e.g. AAPL, TSLA)", value="AAPL")
+stock_ticker = st.text_input("Enter Stock Ticker (e.g. AAPL, TSLA)", value="TQQQ")
 
 # Get the current stock price
 if stock_ticker:
