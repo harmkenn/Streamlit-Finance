@@ -33,6 +33,7 @@ if stock_ticker:
             lower_bound = 0.9 * current_price
             upper_bound = 1.2 * current_price
             filtered_calls = calls[(calls["strike"] >= lower_bound) & (calls["strike"] <= upper_bound)]
+            
 
             # Create the DataFrame
             df = pd.DataFrame({
