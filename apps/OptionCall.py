@@ -1,8 +1,19 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import calendar
 import datetime
 import mibian
+
+def get_third_friday_next_month():
+    today = datetime.date.today()
+    # Move to first day of next month
+    first_of_next_month = (today.replace(day=1) + datetime.timedelta(days=32)).replace(day=1)
+    # Get all Fridays in that month
+    fridays = [day for day in range(1, 32)
+               if calendar.weekday(first_of_next_month.year, first_of_next_month.month, day) == calendar.FRIDAY]
+    third_friday_day = fridays[2]  # third Friday is the third one (0-indexed)
+    return datetime.date(first_of_next_month.year, first_of_next_month.month, third_friday_day).strftime("%Y-%m-%d")
 
 # Set the app title
 st.title("TQQQ Covered Call Analyzer with Greeks")
@@ -26,7 +37,8 @@ if stock_ticker:
             with col2:
                 st.metric("Current Price", f"${current_price:.2f}")
             with col3:
-                selected_date = st.selectbox("Expiration Date", options)
+                default_date = get_third_friday_next_month()
+                selected_date = st.selectbox("Expiration Date", options, index=options.index(default_date) if default_date in options else 0)
 
             # Get call option chain
             calls = stock.option_chain(selected_date).calls
