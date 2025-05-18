@@ -67,13 +67,13 @@ if stock_ticker:
 
             # Display final dataframe
             df = filtered_calls[[
-                "strike", "lastPrice", "openInterest", "volume", "impliedVolatility", "Delta", "Theta"
+                "strike", "lastPrice", "openInterest", "volume", "Delta"
             ]].rename(columns={
                 "strike": "Strike",
                 "lastPrice": "Premium",
                 "openInterest": "OI",
                 "volume": "Vol",
-                "impliedVolatility": "IV"
+                "Delta": "Delta"
             })
 
             df["IV"] = (df["IV"] * 100).round(2)
@@ -87,9 +87,7 @@ if stock_ticker:
                 **Premium** – The current price you receive for selling the option (per share).<br>
                 **OI (Open Interest)** – The total number of open contracts for that strike.<br>
                 **Vol (Volume)** – The number of contracts traded today.<br>
-                **IV (%)** – Implied Volatility: the market's forecast of the stock's future volatility.<br>
                 **Delta** – The expected change in option price for a $1 move in the stock.<br>
-                **Theta** – The amount the option price decays per day (time decay).
                 """, unsafe_allow_html=True)
 
 
