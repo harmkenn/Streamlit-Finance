@@ -75,8 +75,9 @@ if stock_ticker:
                 "volume": "Vol",
                 "impliedVolatility": "IV"
             })
-            
+
             df["Strike/Price"] = (df["Strike"] / current_price).round(3)
+            df["Premium/Price"] = (df["Premium"] / current_price).round(3)
             df["IV"] = (df["IV"] * 100).round(2)
 
             st.subheader("Filtered Call Options with Greeks")
