@@ -11,7 +11,7 @@ stock_ticker = st.text_input("Enter Stock Ticker (e.g. AAPL, TSLA)", value="TQQQ
 # Get the current stock price
 if stock_ticker:
     stock = yf.Ticker(stock_ticker)
-    current_price = stock.info["currentPrice"]
+    current_price = stock.info["regularMarketPrice"]
     st.write(f"Current Stock Price: ${current_price:.2f}")
 
     # Get the options data
