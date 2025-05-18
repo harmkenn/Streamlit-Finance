@@ -11,7 +11,7 @@ sub_app_names = {
     'Intraday.py': 'Intraday',
     'Dividends.py': 'Dividends',
     'etradehunt.py': 'Etrade Hunt',
-    'SOXLplan.py': 'SOXL Plan',
+    'OptionCall.py': 'Option Calls',
     'Whatif.py': 'Last Year',
     'OptionWeek.py': 'Option Week',
     'NASfromIndex.py': 'Predict Nasdaq'
