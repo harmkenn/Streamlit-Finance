@@ -81,5 +81,19 @@ if stock_ticker:
             st.subheader("Filtered Call Options with Greeks")
             st.dataframe(df)
 
+            with st.expander("📘 Column Descriptions"):
+                st.markdown("""
+                **Strike** – The price at which the option allows you to buy the stock.<br>
+                **Premium** – The current price you receive for selling the option (per share).<br>
+                **OI (Open Interest)** – The total number of open contracts for that strike.<br>
+                **Vol (Volume)** – The number of contracts traded today.<br>
+                **IV (%)** – Implied Volatility: the market's forecast of the stock's future volatility.<br>
+                **Delta** – The expected change in option price for a $1 move in the stock.<br>
+                **Theta** – The amount the option price decays per day (time decay).
+                """, unsafe_allow_html=True)
+
+
     except Exception as e:
         st.error(f"An error occurred: {e}")
+
+    
