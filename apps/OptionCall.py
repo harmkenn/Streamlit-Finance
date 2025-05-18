@@ -4,6 +4,7 @@ import pandas as pd
 
 st.title("Option Calls App")
 
+# Set up columns for input layout
 col1, col2, col3 = st.columns([1, 1, 2])
 
 with col1:
@@ -25,19 +26,25 @@ if stock_ticker:
             with col3:
                 selected_date = st.selectbox("Expiration Date", options)
 
+            # Load call options for selected expiration
             calls = stock.option_chain(selected_date).calls
 
-            # Placeholder for Delta (not available via yfinance)
+            # Filter strikes within 90% to 120% of current price
+            lower_bound = 0.9 * current_price
+            upper_bound = 1.2 * current_price
+            filtered_calls = calls[(calls["strike"] >= lower_bound) & (calls["strike"] <= upper_bound)]
+
+            # Create the DataFrame
             df = pd.DataFrame({
-                "Strike": calls["strike"],
-                "Premium": calls["lastPrice"],
-                "Open Interest": calls["openInterest"],
-                "Volume": calls["volume"],
-                "IV (%)": (calls["impliedVolatility"] * 100).round(2),
-                "Delta": "N/A"  # Placeholder
+                "Strike": filtered_calls["strike"],
+                "Premium": filtered_calls["lastPrice"],
+                "Open Interest": filtered_calls["openInterest"],
+                "Volume": filtered_calls["volume"],
+                "IV (%)": (filtered_calls["impliedVolatility"] * 100).round(2),
+                "Delta": "N/A"  # Placeholder unless you compute Delta separately
             })
 
-            st.subheader("Call Option Chain")
+            st.subheader("Filtered Call Option Chain (90%–120% Strike Range)")
             st.dataframe(df)
 
     except Exception as e:
