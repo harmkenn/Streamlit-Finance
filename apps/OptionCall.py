@@ -1,12 +1,14 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import datetime
+import mibian
 
-st.title("Option Calls App")
+# Set the app title
+st.title("TQQQ Covered Call Analyzer with Greeks")
 
-# Set up columns for input layout
+# Layout input controls
 col1, col2, col3 = st.columns([1, 1, 2])
-
 with col1:
     stock_ticker = st.text_input("Ticker", value="TQQQ")
 
@@ -22,30 +24,61 @@ if stock_ticker:
             st.error("No options data available for this stock.")
         else:
             with col2:
-                st.metric(label="Current Price", value=f"${current_price:.2f}")
+                st.metric("Current Price", f"${current_price:.2f}")
             with col3:
                 selected_date = st.selectbox("Expiration Date", options)
 
-            # Load call options for selected expiration
+            # Get call option chain
             calls = stock.option_chain(selected_date).calls
 
-            # Filter strikes within 90% to 120% of current price
+            # Filter by strike range: 90% to 120% of current price
             lower_bound = 0.9 * current_price
             upper_bound = 1.2 * current_price
-            filtered_calls = calls[(calls["strike"] >= lower_bound) & (calls["strike"] <= upper_bound)]
-            
+            filtered_calls = calls[
+                (calls["strike"] >= lower_bound) & 
+                (calls["strike"] <= upper_bound)
+            ]
 
-            # Create the DataFrame
-            df = pd.DataFrame({
-                "Strike": filtered_calls["strike"],
-                "Premium": filtered_calls["lastPrice"],
-                "Open Interest": filtered_calls["openInterest"],
-                "Volume": filtered_calls["volume"],
-                "IV (%)": (filtered_calls["impliedVolatility"] * 100).round(2),
-                "Delta": "N/A"  # Placeholder unless you compute Delta separately
+            # Calculate time to expiry in days
+            today = datetime.datetime.today()
+            expiry = datetime.datetime.strptime(selected_date, "%Y-%m-%d")
+            days_to_expiry = (expiry - today).days
+
+            # Risk-free rate (you can adjust or fetch from online)
+            risk_free_rate = 5  # in percent
+
+            # Calculate Greeks using mibian for each option
+            def compute_greeks(row):
+                try:
+                    S = current_price
+                    K = row["strike"]
+                    t = days_to_expiry
+                    iv = row["impliedVolatility"] * 100  # Convert to percent
+                    if iv <= 0 or t <= 0:
+                        return pd.Series([None, None])
+                    bs = mibian.BS([S, K, risk_free_rate, t], volatility=iv)
+                    return pd.Series([round(bs.callDelta, 3), round(bs.callTheta, 3)])
+                except:
+                    return pd.Series([None, None])
+
+            greeks = filtered_calls.apply(compute_greeks, axis=1)
+            filtered_calls["Delta"] = greeks[0]
+            filtered_calls["Theta"] = greeks[1]
+
+            # Display final dataframe
+            df = filtered_calls[[
+                "strike", "lastPrice", "openInterest", "volume", "impliedVolatility", "Delta", "Theta"
+            ]].rename(columns={
+                "strike": "Strike",
+                "lastPrice": "Premium",
+                "openInterest": "OI",
+                "volume": "Vol",
+                "impliedVolatility": "IV"
             })
 
-            st.subheader("Filtered Call Option Chain (90%–120% Strike Range)")
+            df["IV"] = (df["IV"] * 100).round(2)
+
+            st.subheader("Filtered Call Options with Greeks")
             st.dataframe(df)
 
     except Exception as e:
