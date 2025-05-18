@@ -47,21 +47,38 @@ if stock_ticker:
             # Risk-free rate (you can adjust or fetch from online)
             risk_free_rate = 5  # in percent
 
-            # Dummy values for Greeks (since IV is not used)
-            filtered_calls["Delta"] = None
-            filtered_calls["Theta"] = None
+            # Calculate Greeks using mibian for each option
+            def compute_greeks(row):
+                try:
+                    S = current_price
+                    K = row["strike"]
+                    t = days_to_expiry
+                    iv = row["impliedVolatility"] * 100  # Convert to percent
+                    if iv <= 0 or t <= 0:
+                        return pd.Series([None, None])
+                    bs = mibian.BS([S, K, risk_free_rate, t], volatility=iv)
+                    return pd.Series([round(bs.callDelta, 3), round(bs.callTheta, 3)])
+                except:
+                    return pd.Series([None, None])
+
+            greeks = filtered_calls.apply(compute_greeks, axis=1)
+            filtered_calls["Delta"] = greeks[0]
+            filtered_calls["Theta"] = greeks[1]
 
             # Display final dataframe
-            df = filtered_calls[[ 
-                "strike", "lastPrice", "openInterest", "volume", "Delta", "Theta"
+            df = filtered_calls[[
+                "strike", "lastPrice", "openInterest", "volume", "impliedVolatility", "Delta", "Theta"
             ]].rename(columns={
                 "strike": "Strike",
                 "lastPrice": "Premium",
                 "openInterest": "OI",
-                "volume": "Vol"
+                "volume": "Vol",
+                "impliedVolatility": "IV"
             })
 
-            st.subheader("Filtered Call Options")
+            df["IV"] = (df["IV"] * 100).round(2)
+
+            st.subheader("Filtered Call Options with Greeks")
             st.dataframe(df)
 
             with st.expander("📘 Column Descriptions"):
@@ -70,9 +87,13 @@ if stock_ticker:
                 **Premium** – The current price you receive for selling the option (per share).<br>
                 **OI (Open Interest)** – The total number of open contracts for that strike.<br>
                 **Vol (Volume)** – The number of contracts traded today.<br>
-                **Delta** – The expected change in option price for a $1 move in the stock (not calculated).<br>
-                **Theta** – The amount the option price decays per day (not calculated).
+                **IV (%)** – Implied Volatility: the market's forecast of the stock's future volatility.<br>
+                **Delta** – The expected change in option price for a $1 move in the stock.<br>
+                **Theta** – The amount the option price decays per day (time decay).
                 """, unsafe_allow_html=True)
+
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
+
+    
