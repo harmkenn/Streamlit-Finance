@@ -10,6 +10,7 @@ importlib
 keras
 levenshtein
 matplotlib
+mibian
 mplfinance
 nbformat
 numpy
