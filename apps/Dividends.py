@@ -11,7 +11,7 @@ with col1:
 with col2:
     end_date = st.date_input("End Date", value=datetime.today())
 with col3:
-    ticker = st.text_input("Enter Stock Ticker: TSLY, NVDY, CONY, MSTY", value="NVDY").upper()
+    ticker = st.text_input("Enter Stock Ticker: TSLY, NVDY, CONY, MSTY", value="MSTY").upper()
 
 stock = yf.Ticker(ticker)
 historical_data = stock.history(start=start_date, end=end_date, actions=True)

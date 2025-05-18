@@ -10,7 +10,7 @@ st.title("Intraday Stock Prices (Including Pre-market & After-hours)")
 # User input for stock symbol
 col1, col2, col3 = st.columns(3)
 with col1:
-    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "NVDY").upper()
+    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "TQQQ").upper()
 
 with col3:
     refresh_button = st.button("Refresh")
