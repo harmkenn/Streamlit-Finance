@@ -127,7 +127,7 @@ if ticker:
                                y=data['20-day MA'],
                                mode='lines',
                                name='20-day MA',
-                               line=dict(color='green')))
+                               line=dict(color='orange')))
                 fig.add_trace(
                     go.Scatter(x=data.index,
                                y=data['50-day MA'],
