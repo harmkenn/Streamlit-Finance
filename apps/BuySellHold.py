@@ -70,6 +70,7 @@ if ticker:
                 )
             else:
                 # Calculate moving averages
+                data['20-day MA'] = data['Close'].rolling(window=20).mean()
                 data['50-day MA'] = data['Close'].rolling(window=50).mean()
                 data['200-day MA'] = data['Close'].rolling(window=200).mean()
 
@@ -121,6 +122,12 @@ if ticker:
                                    name="OHLC"))
 
                 # Add moving average traces
+                fig.add_trace(
+                    go.Scatter(x=data.index,
+                               y=data['20-day MA'],
+                               mode='lines',
+                               name='20-day MA',
+                               line=dict(color='blue')))
                 fig.add_trace(
                     go.Scatter(x=data.index,
                                y=data['50-day MA'],
