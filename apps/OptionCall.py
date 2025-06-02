@@ -91,9 +91,12 @@ if stock_ticker:
                 st.dataframe(df_display)
 
             with d2:
-                if st.button("Refresh"):
-                    # re-run the entire script
+
+                # Refresh button logic
+                refresh_button = st.button("Refresh")
+                if refresh_button:
                     st.experimental_rerun()
+
             with st.expander("📘 Column Descriptions"):
                 st.markdown("""
                 **Strike** – The price at which the option allows you to buy the stock.<br>
