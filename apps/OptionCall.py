@@ -81,7 +81,7 @@ if stock_ticker:
             df["IV"] = (df["IV"] * 100).round(2)
 
             st.subheader("Filtered Call Options with Greeks")
-            st.dataframe(df)
+            st.dataframe(df[["Strike", "Premium",  "Delta", "Strike/Price","Premium/Price"]])
 
             with st.expander("📘 Column Descriptions"):
                 st.markdown("""
