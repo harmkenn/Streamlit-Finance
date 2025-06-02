@@ -85,8 +85,7 @@ if stock_ticker:
             df_display = df[["Strike", "Premium", "Delta", "Strike/Price", "Premium/Price"]].copy()
 
             # Format percent columns
-            percent_cols = ["Delta", "Strike/Price", "Premium/Price"]
-            df_display[percent_cols] = df_display[percent_cols].applymap(lambda x: f"{x:.1%}")
+            
             d1,d2 = st.columns((2,3))
             df_display["Delta"] = df_display["Delta"].str.replace("%", "").astype(float)
             df_display = df_display[df_display["Delta"] <= 0.5]
