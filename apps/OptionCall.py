@@ -81,7 +81,16 @@ if stock_ticker:
             df["IV"] = (df["IV"] * 100).round(2)
 
             st.subheader("Filtered Call Options with Greeks")
-            st.dataframe(df[["Strike", "Premium",  "Delta", "Strike/Price","Premium/Price"]])
+            # Select and format columns
+            df_display = df[["Strike", "Premium", "Delta", "Strike/Price", "Premium/Price"]].copy()
+
+            # Format percent columns
+            percent_cols = ["Delta", "Strike/Price", "Premium/Price"]
+            df_display[percent_cols] = df_display[percent_cols].applymap(lambda x: f"{x:.1%}")
+            d1,d2 = st.columns((2,3))
+            with d1:
+                # Display in Streamlit
+                st.dataframe(df_display)
 
             with st.expander("📘 Column Descriptions"):
                 st.markdown("""
