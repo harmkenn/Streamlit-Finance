@@ -90,13 +90,6 @@ if stock_ticker:
                 # Display in Streamlit
                 st.dataframe(df_display)
 
-            with d2:
-
-                # Refresh button logic
-                refresh_button = st.button("Refresh")
-                if refresh_button:
-                    st.experimental_rerun()
-
             with st.expander("📘 Column Descriptions"):
                 st.markdown("""
                 **Strike** – The price at which the option allows you to buy the stock.<br>
