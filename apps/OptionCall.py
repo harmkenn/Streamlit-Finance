@@ -83,12 +83,9 @@ if stock_ticker:
             st.subheader("Filtered Call Options with Greeks")
             # Select and format columns
             df_display = df[["Strike", "Premium", "Delta", "Strike/Price", "Premium/Price"]].copy()
-
-            # Format percent columns
+            df_display = df_display[df_display["Delta"] <= 0.5]
             
             d1,d2 = st.columns((2,3))
-            df_display["Delta"] = df_display["Delta"].str.replace("%", "").astype(float)
-            df_display = df_display[df_display["Delta"] <= 0.5]
             with d1:
                 # Display in Streamlit
                 st.dataframe(df_display)
