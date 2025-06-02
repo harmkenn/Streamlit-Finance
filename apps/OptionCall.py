@@ -88,7 +88,7 @@ if stock_ticker:
             percent_cols = ["Delta", "Strike/Price", "Premium/Price"]
             df_display[percent_cols] = df_display[percent_cols].applymap(lambda x: f"{x:.1%}")
             d1,d2 = st.columns((2,3))
-            df_display = df_display[df_display['Delta']<.5]
+            df_display = df_display[df_display["Delta"] <= 0.5]
             with d1:
                 # Display in Streamlit
                 st.dataframe(df_display)
