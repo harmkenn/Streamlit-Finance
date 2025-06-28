@@ -20,6 +20,7 @@ pip
 plotly
 plotly.express
 polygon-api-client
+prophet
 pydataset
 pyephem
 pygeodesy
