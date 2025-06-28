@@ -10,7 +10,7 @@ sub_app_names = {
     'BuySellHold.py': 'Buy Sell or Hold',
     'Intraday.py': 'Intraday',
     'Dividends.py': 'Dividends',
-    'etradehunt.py': 'Etrade Hunt',
+    'Compare.py': 'Compare',
     'OptionCall.py': 'Option Calls',
     'Whatif.py': 'Last Year',
     'OptionWeek.py': 'Option Week',
