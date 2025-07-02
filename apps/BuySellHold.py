@@ -16,7 +16,7 @@ with col2:
     end_date = st.date_input("End Date", datetime.today())
 with col3:
     # Ticker input
-    ticker = st.text_input("Enter Stock Ticker", "TQQQ").upper()
+    ticker = st.text_input("Enter Stock Ticker", "MSTY").upper()
 
 
 def calculate_rsi(data, window=14):
