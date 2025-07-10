@@ -4,7 +4,7 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-
+    
 st.title("Stock OHLC Plot with Moving Averages")
 
 # Date inputs
