@@ -1,3 +1,5 @@
+#Updated 20250123
+
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
@@ -14,7 +16,7 @@ with col2:
     end_date = st.date_input("End Date", datetime.today())
 with col3:
     # Ticker input
-    ticker = st.text_input("Enter Stock Ticker", "TQQQ").upper()
+    ticker = st.text_input("Enter Stock Ticker", "MSTY").upper()
 
 
 def calculate_rsi(data, window=14):
@@ -60,7 +62,7 @@ if ticker:
     else:
         try:
             stock = yf.Ticker(ticker)
-            data = stock.history(start=start_date, end=end_date, interval='1h', prepost=True)
+            data = stock.history(start=start_date, end=end_date)
 
             if data.empty:
                 st.error(
@@ -68,6 +70,7 @@ if ticker:
                 )
             else:
                 # Calculate moving averages
+                data['20-day MA'] = data['Close'].rolling(window=20).mean()
                 data['50-day MA'] = data['Close'].rolling(window=50).mean()
                 data['200-day MA'] = data['Close'].rolling(window=200).mean()
 
@@ -121,6 +124,12 @@ if ticker:
                 # Add moving average traces
                 fig.add_trace(
                     go.Scatter(x=data.index,
+                               y=data['20-day MA'],
+                               mode='lines',
+                               name='20-day MA',
+                               line=dict(color='orange')))
+                fig.add_trace(
+                    go.Scatter(x=data.index,
                                y=data['50-day MA'],
                                mode='lines',
                                name='50-day MA',
@@ -145,7 +154,7 @@ if ticker:
 
                 with col1: 
                     st.write(f"Ave Open▲: ${float(data['Open▲'].mean()):.2f}")
-                    st.write(f"Ave Open%: {float(data['Open%'].mean())::.2f}%")
+                    st.write(f"Ave Open%: {float(data['Open%'].mean()):.2f}%")
                 with col2:
                     st.write(f"Ave High▲: ${float(data['High▲'].mean()):.2f}")
                     st.write(f"Ave High%: {float(data['High%'].mean()):.2f}%")
@@ -153,7 +162,7 @@ if ticker:
                 with col3:
                     st.write(f"Ave Low▲: ${float(data['Low▲'].mean()):.2f}")
                     st.write(f"Ave Low%: {float(data['Low%'].mean()):.2f}%")
-
+                    
                 with col4:
                     st.write(f"Ave Close▲: ${float(data['Close▲'].mean()):.2f}")
                     st.write(f"Ave Close%: {float(data['Close%'].mean()):.2f}%")
