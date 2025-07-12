@@ -82,7 +82,8 @@ if ticker:
             daily_data['Dividend Payout'] = daily_data['Dividend Payout'].apply(lambda x: "${:,.2f}".format(x))
             daily_data['Stock Price'] = daily_data['Stock Price'].apply(lambda x: "${:,.2f}".format(x))
 
-            st.dataframe(daily_data)
-
+            # Show only rows where Dividend Payout has a value (not zero or not null)
+            filtered_data = daily_data[daily_data['Dividend Payout'] != "$0.00"]
+            st.dataframe(filtered_data)
 else:
     st.write("Please enter an ETF ticker symbol.")
