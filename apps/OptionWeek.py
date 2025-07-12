@@ -59,33 +59,33 @@ tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").s
 ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
     
 
-if ticker_input:
+if ticker:
     # Get all dates
-    earnings_dates = get_earnings_dates(ticker_input)
-    options_dates = get_options_dates(ticker_input)
-    dividend_data = get_past_dividend_payments(ticker_input)
+    earnings_dates = get_earnings_dates(ticker)
+    options_dates = get_options_dates(ticker)
+    dividend_data = get_past_dividend_payments(ticker)
 
     col1, col2, col3 = st.columns(3)
     # Display earnings dates
     with col1:
         if not earnings_dates.empty:
-            st.write(f"Earnings Dates for {ticker_input} in the next 12 months:")
+            st.write(f"Earnings Dates for {ticker} in the next 12 months:")
             st.write(earnings_dates)
         else:
-            st.write(f"No earnings dates found for {ticker_input} in the next 12 months.")
+            st.write(f"No earnings dates found for {ticker} in the next 12 months.")
 
     # Display options expiration dates
     with col2:
         if not options_dates.empty:
-            st.write(f"Options Expiration Dates for {ticker_input} in the next 12 months:")
+            st.write(f"Options Expiration Dates for {ticker} in the next 12 months:")
             st.write(options_dates)
         else:
-            st.write(f"No options expiration dates found for {ticker_input} in the next 12 months.")
+            st.write(f"No options expiration dates found for {ticker} in the next 12 months.")
 
     # Display dividend dates and amounts
     with col3:
         if not dividend_data.empty:
-            st.write(f"Dividend Payments for {ticker_input} in the last 12 months:")
+            st.write(f"Dividend Payments for {ticker} in the last 12 months:")
             st.write(dividend_data)
         else:
-            st.write(f"No dividend payments found for {ticker_input} in the last 12 months.")
+            st.write(f"No dividend payments found for {ticker} in the last 12 months.")
