@@ -14,11 +14,13 @@ with col1:
     start_date = st.date_input("Start Date", datetime.today() - timedelta(days=5 * 365))
 with col2:
     end_date = st.date_input("End Date", datetime.today())
-with col3:
-    # Ticker input
-    ticker = st.text_input("Enter Stock Ticker", "MSTY").upper()
-
-
+with col3:    
+    # Get tickers from session state and split into a list
+    tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+    st.write(tickers_list)
+    # Ticker selector
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
+    
 def calculate_rsi(data, window=14):
     delta = data['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
