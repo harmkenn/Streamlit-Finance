@@ -17,13 +17,11 @@ with col1:
 with col2:
     end_date = st.date_input("End date", datetime.date.today())
 with col3:
-    # Ticker selection boxes (up to 3 tickers)
-    selected_tickers = []
-    for i in range(min(3, len(ticker_list))):
-        selected = st.selectbox(f"Select Ticker {i+1}", ticker_list, index=i)
-        selected_tickers.append(selected)
-    # Remove duplicates and empty selections
-    selected_tickers = [t for t in selected_tickers if t]
+    selected_tickers = st.multiselect(
+        "Select Tickers to Compare",
+        options=ticker_list,
+        default=ticker_list[:3]  # Pre-select up to 3 tickers
+    )
 
 # Split and clean tickers
 ticker_list = [ticker.strip().upper() for ticker in tickers.split(',') if ticker.strip()]
