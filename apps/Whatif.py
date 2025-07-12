@@ -58,31 +58,31 @@ with col1:
 with col2:
     initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
 
-if st.button("Calculate"):
-    if ticker:
-        result, historical_prices, dividend_dates, daily_data = calculate_etf_value(ticker, initial_investment)
-        st.write(result)
 
-        if historical_prices is not None:
-            # Create Plotly chart
-            fig = go.Figure(data=go.Scatter(x=daily_data.index, y=daily_data['Daily Value'], mode='lines'))
-            fig.update_layout(title=f"{ticker} Investment Value Over Time", xaxis_title="Date", yaxis_title="Value ($)")
+if ticker:
+    result, historical_prices, dividend_dates, daily_data = calculate_etf_value(ticker, initial_investment)
+    st.write(result)
 
-            # Add vertical lines for dividend dates
-            if dividend_dates is not None:
-                for date in dividend_dates:
-                    fig.add_vline(x=date, line_width=1, line_dash="dash", line_color="green")
+    if historical_prices is not None:
+        # Create Plotly chart
+        fig = go.Figure(data=go.Scatter(x=daily_data.index, y=daily_data['Daily Value'], mode='lines'))
+        fig.update_layout(title=f"{ticker} Investment Value Over Time", xaxis_title="Date", yaxis_title="Value ($)")
 
-            st.plotly_chart(fig)
+        # Add vertical lines for dividend dates
+        if dividend_dates is not None:
+            for date in dividend_dates:
+                fig.add_vline(x=date, line_width=1, line_dash="dash", line_color="green")
 
-            # Display daily values as a Pandas DataFrame with currency formatting
-            if daily_data is not None:
-                st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
-                daily_data['Daily Value'] = daily_data['Daily Value'].apply(lambda x: "${:,.2f}".format(x))
-                daily_data['Dividend Payout'] = daily_data['Dividend Payout'].apply(lambda x: "${:,.2f}".format(x))
-                daily_data['Stock Price'] = daily_data['Stock Price'].apply(lambda x: "${:,.2f}".format(x))
+        st.plotly_chart(fig)
 
-                st.dataframe(daily_data)
+        # Display daily values as a Pandas DataFrame with currency formatting
+        if daily_data is not None:
+            st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
+            daily_data['Daily Value'] = daily_data['Daily Value'].apply(lambda x: "${:,.2f}".format(x))
+            daily_data['Dividend Payout'] = daily_data['Dividend Payout'].apply(lambda x: "${:,.2f}".format(x))
+            daily_data['Stock Price'] = daily_data['Stock Price'].apply(lambda x: "${:,.2f}".format(x))
 
-    else:
-        st.write("Please enter an ETF ticker symbol.")
+            st.dataframe(daily_data)
+
+else:
+    st.write("Please enter an ETF ticker symbol.")
