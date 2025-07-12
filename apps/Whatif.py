@@ -50,7 +50,11 @@ st.title("ETF Growth Calculator")
 st.write("Enter an ETF ticker symbol and initial investment to calculate its current value.")
 col1, col2 = st.columns(2)
 with col1:
-    ticker = st.text_input("ETF Ticker Symbol (e.g., SPY, VOO, MSTY):", "MSTY").upper()
+    # Get tickers from session state and split into a list
+    tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+
+    # Ticker selector
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
 with col2:
     initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
 
