@@ -10,11 +10,15 @@ st.title("TQQQ Covered Call Analyzer with Greeks")
 # Layout input controls
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
-    stock_ticker = st.text_input("Ticker", value="TQQQ")
+# Get tickers from session state and split into a list
+    tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 
-if stock_ticker:
+    # Ticker selector
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
+
+if ticker:
     try:
-        stock = yf.Ticker(stock_ticker)
+        stock = yf.Ticker(ticker)
         current_price = stock.info.get("regularMarketPrice", None)
         options = stock.options
 
