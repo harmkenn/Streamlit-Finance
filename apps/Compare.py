@@ -8,8 +8,8 @@ import datetime
 st.set_page_config(layout="wide")
 st.title("📈 Stock Comparison Tool (with 7-Day Prophet Forecast)")
 
-# Sidebar for inputs
-tickers = st.text_input("Enter stock tickers (comma-separated)", "TQQQ, MSTY")
+# Get tickers from session state
+tickers = st.session_state.get("tickers", "")
 start_date = st.date_input("Start date", datetime.date(2024, 6, 1))
 end_date = st.date_input("End date", datetime.date.today())
 
@@ -28,7 +28,9 @@ if not ticker_list:
 # Download data
 @st.cache_data
 def load_data(ticker_list, start, end):
+    st.write("Starting download for:", ticker_list)
     raw_data = yf.download(ticker_list, start=start, end=end, group_by='ticker', auto_adjust=False)
+    st.write("Download complete")
 
     if len(ticker_list) == 1:
         ticker = ticker_list[0]
@@ -52,7 +54,9 @@ def load_data(ticker_list, start, end):
     return adj_close_data
 
 # Load and process data
-data = load_data(ticker_list, start_date, end_date)
+with st.spinner("Downloading data..."):
+    st.write("Tickers to download:", ticker_list)
+    data = load_data(ticker_list, start_date, end_date)
 normalized_data = data / data.iloc[0] * 100
 
 # Plot

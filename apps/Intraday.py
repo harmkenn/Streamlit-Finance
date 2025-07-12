@@ -10,19 +10,23 @@ st.title("Intraday Stock Prices (Including Pre-market & After-hours)")
 # User input for stock symbol
 col1, col2, col3 = st.columns(3)
 with col1:
-    stock_symbol = st.text_input("Enter stock symbol (e.g. AAPL, GOOG, MSFT):", "MSTY").upper()
+    # Get tickers from session state and split into a list
+    tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 
+    # Ticker selector
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
+    
 with col3:
     refresh_button = st.button("Refresh")
     
-if stock_symbol:
+if ticker:
     try:
         # Fetch stock data (5-minute interval for 5 days to capture extended hours)
-        ticker = yf.Ticker(stock_symbol)
+        ticker = yf.Ticker(ticker)
         data = ticker.history(period="5d", interval="5m", prepost=True)  # Include pre/after-market
 
         if data.empty:
-            st.error(f"No data found for {stock_symbol}. Please check the symbol and try again.")
+            st.error(f"No data found for {ticker}. Please check the symbol and try again.")
         else:
             with col2:
                 # Get the latest closing price (most recent data point)
@@ -55,7 +59,7 @@ if stock_symbol:
 
             # Update layout
             fig.update_layout(
-                title=f"{stock_symbol} Intraday Prices (Including Pre-market & After-hours)",
+                title=f"{ticker} Intraday Prices (Including Pre-market & After-hours)",
                 xaxis_title="Time",
                 yaxis_title="Price",
                 legend_title="Market Data"

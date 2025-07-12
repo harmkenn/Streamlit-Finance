@@ -17,7 +17,7 @@ with col2:
 with col3:    
     # Get tickers from session state and split into a list
     tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
-    st.write(tickers_list)
+
     # Ticker selector
     ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
     

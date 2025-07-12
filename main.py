@@ -27,15 +27,16 @@ selected_sub_app_name = st.sidebar.radio('Select a sub-app', list(sub_app_names.
 # Get the corresponding .py filename from the selected name
 selected_sub_app = [k for k, v in sub_app_names.items() if v == selected_sub_app_name][0]
 
-# Import and run the selected sub-app
-if selected_sub_app:
-    spec = importlib.util.spec_from_file_location(selected_sub_app, os.path.join(sub_apps_folder, selected_sub_app))
-    sub_app_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(sub_app_module)
-
 # Sidebar input for comma-separated tickers
 tickers_input = st.sidebar.text_input(
     "Enter comma-separated stock tickers",
     value=st.session_state.get("tickers", "MSTY,TSLY,NVDY,CONY")
 )
 st.session_state["tickers"] = tickers_input
+
+# Import and run the selected sub-app
+if selected_sub_app:
+    spec = importlib.util.spec_from_file_location(selected_sub_app, os.path.join(sub_apps_folder, selected_sub_app))
+    sub_app_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sub_app_module)
+
