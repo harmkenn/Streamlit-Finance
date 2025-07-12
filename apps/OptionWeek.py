@@ -52,8 +52,12 @@ def get_past_dividend_payments(ticker):
 st.title("Stock Earnings, Options Expiration, and Dividend Data")
 st.write("Enter a stock ticker symbol to get earnings, options expiration, and past 12 months dividend data.")
 
-# Input for the stock ticker
-ticker_input = st.text_input("Stock Ticker (e.g. AAPL, TSLA)",'NVDA')
+# Get tickers from session state and split into a list
+tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+
+# Ticker selector
+ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
+    
 
 if ticker_input:
     # Get all dates
