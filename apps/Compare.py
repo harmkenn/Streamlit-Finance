@@ -8,10 +8,22 @@ import datetime
 st.set_page_config(layout="wide")
 st.title("📈 Stock Comparison Tool (with 7-Day Prophet Forecast)")
 
-# Get tickers from session state
-tickers = st.session_state.get("tickers", "")
-start_date = st.date_input("Start date", datetime.date(2024, 6, 1))
-end_date = st.date_input("End date", datetime.date.today())
+# Split and clean tickers
+ticker_list = [ticker.strip().upper() for ticker in st.session_state.get("tickers", "").split(',') if ticker.strip()]
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    start_date = st.date_input("Start date", datetime.date(2024, 6, 1))
+with col2:
+    end_date = st.date_input("End date", datetime.date.today())
+with col3:
+    # Ticker selection boxes (up to 3 tickers)
+    selected_tickers = []
+    for i in range(min(3, len(ticker_list))):
+        selected = st.selectbox(f"Select Ticker {i+1}", ticker_list, index=i)
+        selected_tickers.append(selected)
+    # Remove duplicates and empty selections
+    selected_tickers = [t for t in selected_tickers if t]
 
 # Split and clean tickers
 ticker_list = [ticker.strip().upper() for ticker in tickers.split(',') if ticker.strip()]
@@ -28,9 +40,7 @@ if not ticker_list:
 # Download data
 @st.cache_data
 def load_data(ticker_list, start, end):
-    st.write("Starting download for:", ticker_list)
     raw_data = yf.download(ticker_list, start=start, end=end, group_by='ticker', auto_adjust=False)
-    st.write("Download complete")
 
     if len(ticker_list) == 1:
         ticker = ticker_list[0]
@@ -54,9 +64,7 @@ def load_data(ticker_list, start, end):
     return adj_close_data
 
 # Load and process data
-with st.spinner("Downloading data..."):
-    st.write("Tickers to download:", ticker_list)
-    data = load_data(ticker_list, start_date, end_date)
+data = load_data(ticker_list, start_date, end_date)
 normalized_data = data / data.iloc[0] * 100
 
 # Plot
