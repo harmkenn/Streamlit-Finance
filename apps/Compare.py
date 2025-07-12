@@ -23,25 +23,24 @@ with col3:
         default=ticker_list[:3]  # Pre-select up to 3 tickers
     )
 
-# Split and clean tickers
-ticker_list = [ticker.strip().upper() for ticker in tickers.split(',') if ticker.strip()]
+
 
 # Validate dates
 if start_date >= end_date:
     st.error("End date must be after start date.")
     st.stop()
 
-if not ticker_list:
+if not selected_tickers:
     st.error("Please enter at least one valid ticker symbol.")
     st.stop()
 
 # Download data
 @st.cache_data
-def load_data(ticker_list, start, end):
-    raw_data = yf.download(ticker_list, start=start, end=end, group_by='ticker', auto_adjust=False)
+def load_data(selected_tickers, start, end):
+    raw_data = yf.download(selected_tickers, start=start, end=end, group_by='ticker', auto_adjust=False)
 
-    if len(ticker_list) == 1:
-        ticker = ticker_list[0]
+    if len(selected_tickers) == 1:
+        ticker = selected_tickers[0]
         if 'Adj Close' not in raw_data.columns:
             raise ValueError(f"No 'Adj Close' data for {ticker}")
         df = raw_data[['Adj Close']]
@@ -49,7 +48,7 @@ def load_data(ticker_list, start, end):
         return df.dropna()
 
     adj_close_data = pd.DataFrame()
-    for ticker in ticker_list:
+    for ticker in selected_tickers:
         try:
             ticker_data = raw_data[ticker]['Adj Close'].dropna()
             adj_close_data[ticker] = ticker_data
@@ -62,7 +61,7 @@ def load_data(ticker_list, start, end):
     return adj_close_data
 
 # Load and process data
-data = load_data(ticker_list, start_date, end_date)
+data = load_data(selected_tickers, start_date, end_date)
 normalized_data = data / data.iloc[0] * 100
 
 # Plot
