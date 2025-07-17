@@ -1,7 +1,6 @@
-# Updated 20250123 + Dividends
-
 import streamlit as st
-import yfinance as yf
+import pandas as pd
+from yahooquery import Ticker
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -14,69 +13,87 @@ with col1:
     start_date = st.date_input("Start Date", datetime.today() - timedelta(days=5 * 365))
 with col2:
     end_date = st.date_input("End Date", datetime.today())
-with col3:    
-    # Get tickers from session state and split into a list
+with col3:
     tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else st.text_input("Enter ticker").upper()
 
-    # Ticker selector
-    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
-    
 def calculate_rsi(data, window=14):
-    delta = data['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    delta = data['close'].diff()
+    gain = delta.where(delta > 0, 0).rolling(window=window).mean()
+    loss = -delta.where(delta < 0, 0).rolling(window=window).mean()
     rs = gain / loss
     data['RSI'] = 100 - (100 / (1 + rs))
     return data
 
-
 def calculate_mfi(data, window=14):
-    typical_price = (data['High'] + data['Low'] + data['Close']) / 3
-    money_flow = typical_price * data['Volume']
-    positive_flow = (money_flow.where(typical_price > typical_price.shift(1), 0)).rolling(window=window).sum()
-    negative_flow = (money_flow.where(typical_price < typical_price.shift(1), 0)).rolling(window=window).sum()
-    money_flow_index = 100 - (100 / (1 + (positive_flow / negative_flow)))
-    data['MFI'] = money_flow_index
+    typical_price = (data['high'] + data['low'] + data['close']) / 3
+    money_flow = typical_price * data['volume']
+    positive_flow = money_flow.where(typical_price > typical_price.shift(1), 0).rolling(window=window).sum()
+    negative_flow = money_flow.where(typical_price < typical_price.shift(1), 0).rolling(window=window).sum()
+    mfi = 100 - (100 / (1 + (positive_flow / negative_flow)))
+    data['MFI'] = mfi
     return data
 
-
 def calculate_volatility(data, window=30):
-    data['Daily Return'] = data['Close'].pct_change()
+    data['Daily Return'] = data['close'].pct_change()
     data['Volatility'] = data['Daily Return'].rolling(window=window).std() * (252**0.5)
     return data
 
-
 def calculate_atr(data, window=14):
-    data['HL'] = data['High'] - data['Low']
-    data['HC'] = abs(data['High'] - data['Close'].shift())
-    data['LC'] = abs(data['Low'] - data['Close'].shift())
+    data['HL'] = data['high'] - data['low']
+    data['HC'] = abs(data['high'] - data['close'].shift())
+    data['LC'] = abs(data['low'] - data['close'].shift())
     data['TR'] = data[['HL', 'HC', 'LC']].max(axis=1)
     data['ATR'] = data['TR'].rolling(window=window).mean()
     return data
-
 
 if ticker:
     if start_date > end_date:
         st.error("Error: Start date must be before end date.")
     else:
         try:
-            stock = yf.Ticker(ticker)
-            data = stock.history(start=start_date, end=end_date)
-
-            if data.empty:
+            tk = Ticker(ticker)
+            # Fetch historical price data (daily)
+            hist = tk.history(start=start_date, end=end_date, interval='1d')
+            
+            if hist.empty:
                 st.error(f"No data found for {ticker} within the selected date range.")
             else:
-                # Calculate indicators
+                # Yahooquery returns a multi-index if multiple tickers; handle single ticker:
+                if isinstance(hist.index, pd.MultiIndex):
+                    data = hist.xs(ticker, level=0)
+                else:
+                    data = hist
+
+                data = data.reset_index()
+                data = data.rename(columns={
+                    'date': 'Date',
+                    'open': 'Open',
+                    'high': 'High',
+                    'low': 'Low',
+                    'close': 'Close',
+                    'volume': 'Volume',
+                    'dividends': 'Dividends'
+                })
+                data.set_index('Date', inplace=True)
+
+                # Fill dividends NaN with 0
+                data['Dividends'] = data['Dividends'].fillna(0)
+
+                # Calculate indicators on lowercase columns (for your calculation functions)
+                calc_data = data.rename(columns=str.lower).copy()
+
+                calc_data = calculate_rsi(calc_data)
+                calc_data = calculate_mfi(calc_data)
+                calc_data = calculate_atr(calc_data)
+                calc_data = calculate_volatility(calc_data)
+
+                # Calculate MAs
                 data['20-day MA'] = data['Close'].rolling(window=20).mean()
                 data['50-day MA'] = data['Close'].rolling(window=50).mean()
                 data['200-day MA'] = data['Close'].rolling(window=200).mean()
 
-                data = calculate_rsi(data)
-                data = calculate_mfi(data)
-                data = calculate_atr(data)
-                data = calculate_volatility(data)
-
-                # Calculate price deltas
+                # Price deltas
                 data['Open▲'] = data['Open'] - data['Close'].shift(1)
                 data['Open%'] = (data['Open'] / data['Close'].shift(1) - 1) * 100
                 data['High▲'] = data['High'] - data['Close'].shift(1)
@@ -86,21 +103,21 @@ if ticker:
                 data['Close▲'] = data['Close'] - data['Close'].shift(1)
                 data['Close%'] = (data['Close'] / data['Close'].shift(1) - 1) * 100
 
-                # Current price
                 current_price = data['Close'].iloc[-1]
 
-                # Final metric display
+                # Metrics display
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.write(f"Final RSI (30,70) for {ticker}: {data['RSI'].iloc[-1]:.2f}")
-                    st.write(f"Final MFI (20,80) for {ticker}: {data['MFI'].iloc[-1]:.2f}")
+                    st.write(f"Final RSI (30,70) for {ticker}: {calc_data['RSI'].iloc[-1]:.2f}")
+                    st.write(f"Final MFI (20,80) for {ticker}: {calc_data['MFI'].iloc[-1]:.2f}")
                 with col2:
-                    st.write(f"Volatility (ATR 14d): {data['ATR'].iloc[-1]:.2f} ({(data['ATR'].iloc[-1] / current_price * 100):.2f}%)")
-                    st.write(f"Volatility (30-day): {data['Volatility'].iloc[-1]:.2f} ({(data['Volatility'].iloc[-1] / current_price * 100):.2f}%)")
+                    st.write(f"Volatility (ATR 14d): {calc_data['ATR'].iloc[-1]:.2f} ({(calc_data['ATR'].iloc[-1] / current_price * 100):.2f}%)")
+                    st.write(f"Volatility (30-day): {calc_data['Volatility'].iloc[-1]:.2f} ({(calc_data['Volatility'].iloc[-1] / current_price * 100):.2f}%)")
                 with col3:
                     st.write(f"High: {float(data['High'].max()):.2f}")
                     st.write(f"Low: {float(data['Low'].min()):.2f}")
 
-                # Create chart
+                # Plot OHLC + MAs + Dividend markers
                 fig = go.Figure()
 
                 fig.add_trace(go.Candlestick(
@@ -109,9 +126,9 @@ if ticker:
                     high=data['High'],
                     low=data['Low'],
                     close=data['Close'],
-                    name="OHLC"))
+                    name="OHLC"
+                ))
 
-                # Moving averages
                 fig.add_trace(go.Scatter(
                     x=data.index, y=data['20-day MA'],
                     mode='lines', name='20-day MA', line=dict(color='orange')))
@@ -122,7 +139,7 @@ if ticker:
                     x=data.index, y=data['200-day MA'],
                     mode='lines', name='200-day MA', line=dict(color='red')))
 
-                # Add dividend markers
+                # Dividend markers
                 dividend_dates = data[data['Dividends'] > 0]
                 if not dividend_dates.empty:
                     fig.add_trace(go.Scatter(
@@ -146,17 +163,17 @@ if ticker:
 
                 # Key statistics
                 st.subheader("Key Statistics")
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
                     st.write(f"Ave Open▲: ${float(data['Open▲'].mean()):.2f}")
                     st.write(f"Ave Open%: {float(data['Open%'].mean()):.2f}%")
-                with col2:
+                with c2:
                     st.write(f"Ave High▲: ${float(data['High▲'].mean()):.2f}")
                     st.write(f"Ave High%: {float(data['High%'].mean()):.2f}%")
-                with col3:
+                with c3:
                     st.write(f"Ave Low▲: ${float(data['Low▲'].mean()):.2f}")
                     st.write(f"Ave Low%: {float(data['Low%'].mean()):.2f}%")
-                with col4:
+                with c4:
                     st.write(f"Ave Close▲: ${float(data['Close▲'].mean()):.2f}")
                     st.write(f"Ave Close%: {float(data['Close%'].mean()):.2f}%")
 
@@ -165,12 +182,12 @@ if ticker:
                     st.dataframe(data.iloc[::-1][[
                         'Open', 'High', 'Low', 'Close', 'Volume', 'Dividends',
                         '20-day MA', '50-day MA', '200-day MA',
-                        'RSI', 'MFI', 'ATR', 'Volatility',
                         'Open▲', 'Open%', 'High▲', 'High%',
                         'Low▲', 'Low%', 'Close▲', 'Close%'
                     ]])
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
+
 else:
     st.info("Please enter a stock ticker symbol.")

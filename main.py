@@ -30,7 +30,7 @@ selected_sub_app = [k for k, v in sub_app_names.items() if v == selected_sub_app
 # Sidebar input for comma-separated tickers
 tickers_input = st.sidebar.text_input(
     "Enter comma-separated stock tickers",
-    value=st.session_state.get("tickers", "MSTY,TSLY,NVDY,CONY")
+    value=st.session_state.get("tickers", "MSTY,TSLY,NVDY,CONY,MAIN")
 )
 st.session_state["tickers"] = tickers_input
 
