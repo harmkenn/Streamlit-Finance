@@ -9,7 +9,6 @@ st.set_page_config(layout="wide", page_title=f"Finance")
 sub_app_names = {
     'BuySellHold.py': 'Buy Sell or Hold',
     'Intraday.py': 'Intraday',
-    'Dividends.py': 'Dividends',
     'Compare.py': 'Compare',
     'OptionCall.py': 'Option Calls',
     'Whatif.py': 'Last Year',

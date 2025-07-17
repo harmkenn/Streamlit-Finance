@@ -80,6 +80,9 @@ if ticker:
                 # Fill dividends NaN with 0
                 data['Dividends'] = data['Dividends'].fillna(0)
 
+                # Add Yield column: Dividend / Close
+                data['Yield'] = data['Dividends'] / data['Close'] * 100
+
                 # Calculate indicators on lowercase columns (for your calculation functions)
                 calc_data = data.rename(columns=str.lower).copy()
 
@@ -177,14 +180,21 @@ if ticker:
                     st.write(f"Ave Close▲: ${float(data['Close▲'].mean()):.2f}")
                     st.write(f"Ave Close%: {float(data['Close%'].mean()):.2f}%")
 
+                # Option to filter out rows with 0 dividends
+                show_only_dividends = st.checkbox("Show only rows with dividends > 0")
+                if show_only_dividends:
+                    data = data[data['Dividends'] > 0]
+
                 # Raw data view
-                with st.expander("Show raw data"):
-                    st.dataframe(data.iloc[::-1][[
-                        'Open', 'High', 'Low', 'Close', 'Volume', 'Dividends',
-                        '20-day MA', '50-day MA', '200-day MA',
-                        'Open▲', 'Open%', 'High▲', 'High%',
-                        'Low▲', 'Low%', 'Close▲', 'Close%'
-                    ]])
+                st.dataframe(data.iloc[::-1][[
+                'Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Yield',
+                '20-day MA', '50-day MA', '200-day MA',
+                'Open▲', 'Open%', 'High▲', 'High%',
+                'Low▲', 'Low%', 'Close▲', 'Close%'
+                ]])
+
+
+
 
         except Exception as e:
             st.error(f"An error occurred: {e}")
