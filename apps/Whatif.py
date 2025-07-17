@@ -44,6 +44,8 @@ if isinstance(history, pd.DataFrame) and not history.empty:
 
     # Plot investment value
     fig = go.Figure()
+
+    # Line plot for investment value
     fig.add_trace(go.Scatter(
         x=df['date'],
         y=df['investment_value'],
@@ -51,17 +53,32 @@ if isinstance(history, pd.DataFrame) and not history.empty:
         name='Investment Value',
         line=dict(color='green')
     ))
+
+    # Add stars on dividend payout days
+    dividend_days = df[df['dividends'] > 0]
+    fig.add_trace(go.Scatter(
+        x=dividend_days['date'],
+        y=dividend_days['investment_value'],
+        mode='markers',
+        name='Dividend Payout',
+        marker=dict(size=10, symbol='star', color='red'),
+        hovertemplate="Dividend: %{text}<extra></extra>",
+        text=dividend_days['dividends'].apply(lambda x: f"${x:.2f}")
+    ))
+
     fig.update_layout(
-        title="📈 Value of $100,000 Investment in MSTY (with Reinvested Dividends)",
+        title=f"📈 Value of $100,000 Investment in {ticker_symbol} (with Reinvested Dividends)",
         xaxis_title="Date",
         yaxis_title="Portfolio Value (USD)",
         template="plotly_white",
         height=500
     )
+
     st.plotly_chart(fig, use_container_width=True)
 
     # Show the data
     st.subheader("📄 Investment Table")
     st.dataframe(df[['date', 'close', 'dividends', 'shares', 'investment_value']].sort_values('date', ascending=False), use_container_width=True)
+
 else:
-    st.error("⚠️ No data found for MSTY. Please check the ticker or try again later.")
+    st.error(f"⚠️ No data found for {ticker_symbol}. Please check the ticker or try again later.")
