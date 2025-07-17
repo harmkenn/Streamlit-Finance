@@ -1,5 +1,5 @@
 import streamlit as st
-import yfinance as yf
+from yahooquery import Ticker
 import pandas as pd
 from prophet import Prophet
 import numpy as np
@@ -8,9 +8,10 @@ import datetime
 st.set_page_config(layout="wide")
 st.title("📈 Stock Comparison Tool (with 7-Day Prophet Forecast)")
 
-# Split and clean tickers
+# Split and clean tickers from session state
 ticker_list = [ticker.strip().upper() for ticker in st.session_state.get("tickers", "").split(',') if ticker.strip()]
 
+# Date input and ticker selection
 col1, col2, col3 = st.columns(3)
 with col1:
     start_date = st.date_input("Start date", datetime.date(2024, 6, 1))
@@ -20,12 +21,10 @@ with col3:
     selected_tickers = st.multiselect(
         "Select Tickers to Compare",
         options=ticker_list,
-        default=ticker_list[:3]  # Pre-select up to 3 tickers
+        default=ticker_list[:3]
     )
 
-
-
-# Validate dates
+# Validate inputs
 if start_date >= end_date:
     st.error("End date must be after start date.")
     st.stop()
@@ -34,41 +33,35 @@ if not selected_tickers:
     st.error("Please enter at least one valid ticker symbol.")
     st.stop()
 
-# Download data
+# ✅ Load data using yahooquery and pivot to adjusted close
 @st.cache_data
-def load_data(selected_tickers, start, end):
-    raw_data = yf.download(selected_tickers, start=start, end=end, group_by='ticker', auto_adjust=False)
+def load_data(tickers, start, end):
+    tq = Ticker(tickers)
+    history = tq.history(start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'))
 
-    if len(selected_tickers) == 1:
-        ticker = selected_tickers[0]
-        if 'Adj Close' not in raw_data.columns:
-            raise ValueError(f"No 'Adj Close' data for {ticker}")
-        df = raw_data[['Adj Close']]
-        df.columns = [ticker]
-        return df.dropna()
+    if history.empty:
+        raise ValueError("No data returned.")
 
-    adj_close_data = pd.DataFrame()
-    for ticker in selected_tickers:
-        try:
-            ticker_data = raw_data[ticker]['Adj Close'].dropna()
-            adj_close_data[ticker] = ticker_data
-        except (KeyError, TypeError):
-            st.warning(f"⚠️ No data found for {ticker}. It will be skipped.")
+    history = history.reset_index()
+    history = history[['symbol', 'date', 'adjclose']]
 
-    if adj_close_data.empty:
-        raise ValueError("No valid data returned for any tickers.")
-    
-    return adj_close_data
+    if history.empty or 'adjclose' not in history.columns:
+        raise ValueError("Adjusted close prices not found.")
+
+    data = history.pivot(index='date', columns='symbol', values='adjclose')
+    data.index.name = 'Date'
+    data.columns.name = None
+
+    return data.dropna(how='all')
 
 # Load and process data
 data = load_data(selected_tickers, start_date, end_date)
-normalized_data = data / data.iloc[0] * 100
 
-# Plot
-st.subheader("Normalized Stock Prices (Start at 100)")
-st.line_chart(normalized_data)
+# 📊 Plot actual adjusted close prices
+st.subheader("Stock Prices (Adjusted Close)")
+st.line_chart(data)
 
-# Summary statistics
+# 📋 Summary statistics
 st.subheader("📋 Summary Statistics")
 returns = data.pct_change().dropna()
 stats = pd.DataFrame(index=data.columns)
@@ -80,25 +73,20 @@ stats["Annualized Return (%)"] = ((data.iloc[-1] / data.iloc[0]) ** (1 / num_yea
 stats["Volatility (Std Dev of Daily Returns)"] = returns.std()
 stats["7-Day Predicted Price"] = np.nan
 
-# Prophet-based 7-day prediction
+# 🔮 Prophet-based 7-day prediction
 for ticker in data.columns:
     try:
         df = data[[ticker]].dropna().reset_index()
         df.columns = ['ds', 'y']
-
         model = Prophet(daily_seasonality=True)
         model.fit(df)
-
         future = model.make_future_dataframe(periods=7)
         forecast = model.predict(future)
-
-        predicted_price = forecast.iloc[-1]['yhat']
-        stats.loc[ticker, "7-Day Predicted Price"] = predicted_price
-
+        stats.loc[ticker, "7-Day Predicted Price"] = forecast.iloc[-1]['yhat']
     except Exception as e:
         st.warning(f"Prophet prediction failed for {ticker}: {e}")
 
-# Display stats table
+# 📑 Display summary table
 st.dataframe(stats.style.format({
     "Start Price": "${:,.2f}",
     "End Price": "${:,.2f}",
@@ -108,6 +96,6 @@ st.dataframe(stats.style.format({
     "7-Day Predicted Price": "${:,.2f}"
 }))
 
-# Optional: Show raw data
+# 🔍 Show raw data toggle
 if st.checkbox("Show raw data"):
     st.write(data)

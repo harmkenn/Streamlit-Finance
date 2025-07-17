@@ -4,3 +4,4 @@ pandas
 numpy
 yahooquery
 plotly
+prophet
