@@ -4,102 +4,64 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
-def calculate_etf_value(ticker, initial_investment):
-    """Calculates the current value of an ETF investment with reinvested dividends using yahooquery."""
+st.title("📈 $100,000 Investment Growth with Reinvested Dividends")
 
-    try:
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
+# Parameters
+tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+ticker_symbol = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else st.text_input("Enter ticker").upper()
+initial_investment = 100000
 
-        tq = Ticker(ticker)
-        history = tq.history(start=start_date.strftime("%Y-%m-%d"), end=end_date.strftime("%Y-%m-%d"))
+# Date range
+end_date = datetime.today()
+start_date = end_date - timedelta(days=365)
 
-        if history.empty:
-            return "No historical data found for the given ticker.", None, None, None
+# Fetch data
+ticker = Ticker(ticker_symbol)
+history = ticker.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
-        history = history.reset_index()
-        history = history[history['symbol'] == ticker]
+# Check for data
+if isinstance(history, pd.DataFrame) and not history.empty:
+    # Filter and clean
+    history = history.reset_index()
+    df = history[history['symbol'] == ticker_symbol][['date', 'close', 'dividends']]
+    df = df.sort_values('date').reset_index(drop=True)
+    df['dividends'] = df['dividends'].fillna(0)
 
-        if 'adjclose' not in history.columns or 'dividends' not in history.columns:
-            return "Required columns missing from data.", None, None, None
+    # Initialize columns
+    df['shares'] = 0.0
+    df['investment_value'] = 0.0
 
-        history = history[['date', 'adjclose', 'dividends']].rename(columns={
-            'date': 'Date',
-            'adjclose': 'Price',
-            'dividends': 'Dividend'
-        })
-        history.set_index('Date', inplace=True)
+    # Initial shares
+    shares = initial_investment / df.loc[0, 'close']
+    df.loc[0, 'shares'] = shares
+    df.loc[0, 'investment_value'] = shares * df.loc[0, 'close']
 
-        if history['Price'].empty:
-            return "No historical price data found for the given ticker.", None, None, None
+    # Loop through days to update shares and value
+    for i in range(1, len(df)):
+        shares += df.loc[i, 'dividends'] * shares / df.loc[i, 'close']
+        df.loc[i, 'shares'] = shares
+        df.loc[i, 'investment_value'] = shares * df.loc[i, 'close']
 
-        # Calculate initial shares
-        initial_price = history['Price'].iloc[0]
-        shares = initial_investment / initial_price
+    # Plot investment value
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df['date'],
+        y=df['investment_value'],
+        mode='lines',
+        name='Investment Value',
+        line=dict(color='green')
+    ))
+    fig.update_layout(
+        title="📈 Value of $100,000 Investment in MSTY (with Reinvested Dividends)",
+        xaxis_title="Date",
+        yaxis_title="Portfolio Value (USD)",
+        template="plotly_white",
+        height=500
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-        # Reinvest dividends
-        current_shares = shares
-        dividend_dates = []
-        daily_values = []
-        payouts = []
-
-        for date, row in history.iterrows():
-            price = row['Price']
-            dividend = row['Dividend']
-
-            if pd.notna(dividend) and dividend > 0:
-                current_shares += (current_shares * dividend) / price
-                dividend_dates.append(date)
-                payouts.append(shares * dividend)
-            else:
-                payouts.append(0)
-
-            daily_values.append(current_shares * price)
-
-        history['Daily Value'] = daily_values
-        history['Dividend Payout'] = payouts
-
-        return f"The current value of your investment is: ${daily_values[-1]:,.2f}", history['Price'], dividend_dates, history
-
-    except Exception as e:
-        return f"An error occurred: {e}", None, None, None
-
-
-# Streamlit App
-st.title("ETF Growth Calculator (using Yahooquery)")
-st.write("Enter an ETF ticker symbol and initial investment to calculate its current value.")
-
-col1, col2 = st.columns(2)
-with col1:
-    tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
-    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
-with col2:
-    initial_investment = st.number_input("Initial Investment ($):", value=10000.0)
-
-if ticker:
-    result, historical_prices, dividend_dates, daily_data = calculate_etf_value(ticker, initial_investment)
-    st.write(result)
-
-    if historical_prices is not None and daily_data is not None:
-        # Plot investment growth
-        fig = go.Figure(data=go.Scatter(x=daily_data.index, y=daily_data['Daily Value'], mode='lines'))
-        fig.update_layout(title=f"{ticker} Investment Value Over Time",
-                          xaxis_title="Date", yaxis_title="Value ($)")
-
-        # Add vertical lines for dividends
-        for date in dividend_dates:
-            fig.add_vline(x=date, line_width=1, line_dash="dash", line_color="green")
-
-        st.plotly_chart(fig)
-
-        # Display table
-        st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
-        formatted_data = daily_data.copy()
-        formatted_data['Daily Value'] = formatted_data['Daily Value'].apply(lambda x: "${:,.2f}".format(x))
-        formatted_data['Dividend Payout'] = formatted_data['Dividend Payout'].apply(lambda x: "${:,.2f}".format(x))
-        formatted_data['Price'] = formatted_data['Price'].apply(lambda x: "${:,.2f}".format(x))
-
-        filtered_data = formatted_data[formatted_data['Dividend Payout'] != "$0.00"]
-        st.dataframe(filtered_data)
+    # Show the data
+    st.subheader("📄 Investment Table")
+    st.dataframe(df[['date', 'close', 'dividends', 'shares', 'investment_value']].sort_values('date', ascending=False), use_container_width=True)
 else:
-    st.write("Please enter an ETF ticker symbol.")
+    st.error("⚠️ No data found for MSTY. Please check the ticker or try again later.")
