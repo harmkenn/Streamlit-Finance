@@ -17,35 +17,47 @@ with col3:
 if ticker:
     try:
         tk = Ticker(ticker)
-        
-        # Fetch historical prices and dividends (yahooquery returns combined history with 'dividends' column)
-        hist = tk.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'), actions=True)
-        
-        if hist.empty:
-            st.error(f"No data found for {ticker} in the selected date range.")
-        else:
-            # If multiple tickers, extract relevant ticker
-            if isinstance(hist.index, pd.MultiIndex):
-                data = hist.xs(ticker, level=0)
-            else:
-                data = hist
-            
-            data = data.copy()
-            # 'dividends' column may not exist if no dividends, so ensure it does
-            if 'dividends' not in data.columns:
-                data['dividends'] = 0.0
 
-            # Filter rows with dividends
-            div_data = data[data['dividends'] != 0][['close', 'dividends']].copy()
+        # Fetch price history
+        price_hist = tk.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
+        if price_hist.empty:
+            st.error(f"No price data found for {ticker} in the selected date range.")
+        else:
+            # If MultiIndex (multiple tickers), extract relevant ticker
+            if isinstance(price_hist.index, pd.MultiIndex):
+                price_hist = price_hist.xs(ticker, level=0)
+            
+            # Fetch dividends separately
+            divs = tk.dividends
+            if divs.empty:
+                st.info("No dividend data found for this ticker.")
+                divs = pd.DataFrame(columns=['date', 'dividends'])
+            else:
+                # dividends is a Series indexed by datetime, convert to DataFrame and filter dates
+                divs = divs.reset_index()
+                divs.columns = ['date', 'dividends']
+                divs['date'] = pd.to_datetime(divs['date'])
+                divs = divs[(divs['date'] >= pd.to_datetime(start_date)) & (divs['date'] <= pd.to_datetime(end_date))]
+            
+            # Merge dividend data onto price history by date
+            price_hist = price_hist.reset_index()
+            price_hist['date'] = pd.to_datetime(price_hist['date'])
+            merged = pd.merge(price_hist, divs, how='left', on='date')
+            merged['dividends'].fillna(0, inplace=True)
+
+            # Calculate dividend yield (%)
+            merged['Dividend Yield (%)'] = (merged['dividends'] / merged['close']) * 100
+
+            # Filter only dividend payout days
+            div_data = merged[merged['dividends'] != 0][['date', 'close', 'dividends', 'Dividend Yield (%)']]
+            div_data = div_data.rename(columns={'close': 'Close Price', 'dividends': 'Dividend'}).iloc[::-1]
+
             if div_data.empty:
                 st.info("No dividend payouts found in the selected date range.")
             else:
-                div_data['Dividend Yield (%)'] = (div_data['dividends'] / div_data['close']) * 100
-                div_data = div_data.rename(columns={'close': 'Close Price', 'dividends': 'Dividend'})
-                div_data = div_data.iloc[::-1]  # reverse to show recent first
-                
-                st.write("Daily Investment Values, Dividend Payouts, and Stock Prices:")
+                st.write("Dividend Payouts and Corresponding Close Prices:")
                 st.dataframe(div_data)
+
     except Exception as e:
         st.error(f"Error fetching data: {e}")
 else:
