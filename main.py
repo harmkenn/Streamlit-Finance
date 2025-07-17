@@ -27,7 +27,7 @@ selected_sub_app_name = st.sidebar.radio('Select a sub-app', list(sub_app_names.
 selected_sub_app = [k for k, v in sub_app_names.items() if v == selected_sub_app_name][0]
 
 # Sidebar input for comma-separated tickers
-tickers_input = st.sidebar.text_input(
+tickers_input = st.sidebar.text_area(
     "Enter comma-separated stock tickers",
     value=st.session_state.get("tickers", "MSTY,TSLY,NVDY,CONY,MAIN")
 )
