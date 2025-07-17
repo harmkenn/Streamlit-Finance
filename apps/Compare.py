@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
-st.title("📈 Normalized Closing Prices - MSTY vs MAIN (Last 12 Months)")
+st.title("📈 Normalized Closing Prices(Last 12 Months)")
 
 # Define tickers
 ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
