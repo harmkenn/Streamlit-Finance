@@ -31,70 +31,89 @@ if ticker:
             # Convert timestamps to Eastern Time for session filtering
             data = data.tz_convert("America/New_York")
 
-            with col2:
-                # Get the latest price
-                latest_price = data["Close"].iloc[-1]
+        with col2:
+            # Get the latest price
+            latest_price = data["Close"].iloc[-1]
 
-                # Filter only regular trading hours
-                regular_hours = data.between_time("09:30", "16:00")
+            # Filter only regular trading hours
+            regular_hours = data.between_time("09:30", "16:00")
 
-                # Group by date and get the last close of each day
-                grouped_days = regular_hours.groupby(regular_hours.index.date)
+            # Group by date and get the last close of each day
+            grouped_days = regular_hours.groupby(regular_hours.index.date)
 
-                if len(grouped_days) >= 2:
-                    last_full_close = grouped_days.last().iloc[-2]["Close"]
-                else:
-                    last_full_close = latest_price  # Fallback if insufficient data
+            if len(grouped_days) >= 3:
+                # Most recent full close (yesterday)
+                prev_close = grouped_days.last().iloc[-2]["Close"]
+                # Close before that
+                prev_prev_close = grouped_days.last().iloc[-3]["Close"]
+            elif len(grouped_days) == 2:
+                prev_close = grouped_days.last().iloc[-2]["Close"]
+                prev_prev_close = prev_close  # Fallback
+            else:
+                prev_close = latest_price
+                prev_prev_close = prev_close  # Fallback
 
-                # Calculate percent change
-                percent_change = ((latest_price - last_full_close) / last_full_close) * 100
-                change_color = "green" if percent_change >= 0 else "red"
+            # Change from previous close to current
+            percent_change = ((latest_price - prev_close) / prev_close) * 100
+            change_color = "green" if percent_change >= 0 else "red"
 
-                # Display current price and percent change
-                st.markdown(
-                    f"### Current Price: ${latest_price:.2f} "
-                    f"<span style='color:{change_color}; font-size:20px'>({percent_change:+.2f}%)</span>",
-                    unsafe_allow_html=True
-                )
+            # Change from prior-to-previous close to previous close
+            prev_change = ((prev_close - prev_prev_close) / prev_prev_close) * 100
+            prev_color = "green" if prev_change >= 0 else "red"
 
-            # Create subplots for price and volume
-            fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-            # Plot price
-            fig.add_trace(go.Scatter(
-                x=data.index,
-                y=data["Close"],
-                mode="lines",
-                name="Stock Price",
-                line=dict(color="blue")
-            ), secondary_y=False)
-
-            # Plot volume
-            fig.add_trace(go.Bar(
-                x=data.index,
-                y=data["Volume"],
-                name="Volume",
-                marker=dict(color="grey")
-            ), secondary_y=True)
-
-            # Update layout
-            fig.update_layout(
-                title=f"{ticker} Intraday Prices (Including Pre-market & After-hours)",
-                xaxis_title="Time",
-                yaxis_title="Price",
-                legend_title="Market Data"
+            # Display previous closing price and its change
+            st.markdown(
+                f"### Previous Close: ${prev_close:.2f} "
+                f"<span style='color:{prev_color}; font-size:18px'>({prev_change:+.2f}%)</span>",
+                unsafe_allow_html=True
             )
-            fig.update_yaxes(title_text="Volume", secondary_y=True)
 
-            # Display chart
-            st.plotly_chart(fig)
+            # Display current price and percent change from previous close
+            st.markdown(
+                f"### Current Price: ${latest_price:.2f} "
+                f"<span style='color:{change_color}; font-size:20px'>({percent_change:+.2f}%)</span>",
+                unsafe_allow_html=True
+            )
 
-            # Show raw data (reversed for most recent on top)
-            st.write(data[["Close", "Volume"]][::-1])
 
-            # Refresh button logic
-            if refresh_button:
-                st.experimental_rerun()
+        # Create subplots for price and volume
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Plot price
+        fig.add_trace(go.Scatter(
+            x=data.index,
+            y=data["Close"],
+            mode="lines",
+            name="Stock Price",
+            line=dict(color="blue")
+        ), secondary_y=False)
+
+        # Plot volume
+        fig.add_trace(go.Bar(
+            x=data.index,
+            y=data["Volume"],
+            name="Volume",
+            marker=dict(color="grey")
+        ), secondary_y=True)
+
+        # Update layout
+        fig.update_layout(
+            title=f"{ticker} Intraday Prices (Including Pre-market & After-hours)",
+            xaxis_title="Time",
+            yaxis_title="Price",
+            legend_title="Market Data"
+        )
+        fig.update_yaxes(title_text="Volume", secondary_y=True)
+
+        # Display chart
+        st.plotly_chart(fig)
+
+        # Show raw data (reversed for most recent on top)
+        st.write(data[["Close", "Volume"]][::-1])
+
+        # Refresh button logic
+        if refresh_button:
+            st.experimental_rerun()
 
     except Exception as e:
         st.error(f"Error fetching data: {e}")
