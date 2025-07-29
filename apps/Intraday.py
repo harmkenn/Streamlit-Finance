@@ -15,53 +15,61 @@ with col1:
 
     # Ticker selector
     ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
-    
+
 with col3:
     refresh_button = st.button("Refresh")
-    
+
 if ticker:
     try:
         # Fetch stock data (5-minute interval for 5 days to capture extended hours)
-        ticker = yf.Ticker(ticker)
-        data = ticker.history(period="5d", interval="5m", prepost=True)  # Include pre/after-market
+        yf_ticker = yf.Ticker(ticker)
+        data = yf_ticker.history(period="5d", interval="5m", prepost=True)
 
         if data.empty:
             st.error(f"No data found for {ticker}. Please check the symbol and try again.")
         else:
+            # Convert timestamps to Eastern Time for session filtering
+            data = data.tz_convert("America/New_York")
+
             with col2:
                 # Get the latest price
                 latest_price = data["Close"].iloc[-1]
 
-                # Get the most recent "regular market" close (assumes 16:00 is regular close time)
-                regular_hours_data = data.between_time("09:30", "16:00")
-                last_regular_close = regular_hours_data["Close"].iloc[-1] if not regular_hours_data.empty else latest_price
+                # Filter only regular trading hours
+                regular_hours = data.between_time("09:30", "16:00")
+
+                # Group by date and get the last close of each day
+                grouped_days = regular_hours.groupby(regular_hours.index.date)
+
+                if len(grouped_days) >= 2:
+                    last_full_close = grouped_days.last().iloc[-2]["Close"]
+                else:
+                    last_full_close = latest_price  # Fallback if insufficient data
 
                 # Calculate percent change
-                percent_change = ((latest_price - last_regular_close) / last_regular_close) * 100 if last_regular_close != 0 else 0
-
-                # Display price and percent change
+                percent_change = ((latest_price - last_full_close) / last_full_close) * 100
                 change_color = "green" if percent_change >= 0 else "red"
+
+                # Display current price and percent change
                 st.markdown(
                     f"### Current Price: ${latest_price:.2f} "
                     f"<span style='color:{change_color}; font-size:20px'>({percent_change:+.2f}%)</span>",
                     unsafe_allow_html=True
                 )
-            # Convert timestamps to Eastern Time
-            data = data.tz_convert("America/New_York")
 
             # Create subplots for price and volume
             fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # Plot single-colored line for price
+            # Plot price
             fig.add_trace(go.Scatter(
                 x=data.index,
                 y=data["Close"],
                 mode="lines",
                 name="Stock Price",
-                line=dict(color="blue")  # Set single color
+                line=dict(color="blue")
             ), secondary_y=False)
 
-            # Volume as grey bars
+            # Plot volume
             fig.add_trace(go.Bar(
                 x=data.index,
                 y=data["Volume"],
@@ -81,9 +89,8 @@ if ticker:
             # Display chart
             st.plotly_chart(fig)
 
-            # Show raw data
-            data = data[::-1]
-            st.write(data[["Close", "Volume"]])
+            # Show raw data (reversed for most recent on top)
+            st.write(data[["Close", "Volume"]][::-1])
 
             # Refresh button logic
             if refresh_button:

@@ -1,7 +1,10 @@
 # pip install -r requirements.txt
+# source ~/.bashrc
+
 streamlit
 pandas
 numpy
 yahooquery
 plotly
 prophet
+yfinance
