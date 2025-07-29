@@ -29,11 +29,23 @@ if ticker:
             st.error(f"No data found for {ticker}. Please check the symbol and try again.")
         else:
             with col2:
-                # Get the latest closing price (most recent data point)
+                # Get the latest price
                 latest_price = data["Close"].iloc[-1]
-                
-                # Display the current price at the top of the page
-                st.markdown(f"### Current Price: ${latest_price:.2f}")
+
+                # Get the most recent "regular market" close (assumes 16:00 is regular close time)
+                regular_hours_data = data.between_time("09:30", "16:00")
+                last_regular_close = regular_hours_data["Close"].iloc[-1] if not regular_hours_data.empty else latest_price
+
+                # Calculate percent change
+                percent_change = ((latest_price - last_regular_close) / last_regular_close) * 100 if last_regular_close != 0 else 0
+
+                # Display price and percent change
+                change_color = "green" if percent_change >= 0 else "red"
+                st.markdown(
+                    f"### Current Price: ${latest_price:.2f} "
+                    f"<span style='color:{change_color}; font-size:20px'>({percent_change:+.2f}%)</span>",
+                    unsafe_allow_html=True
+                )
             # Convert timestamps to Eastern Time
             data = data.tz_convert("America/New_York")
 
