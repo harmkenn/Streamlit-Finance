@@ -39,41 +39,44 @@ if ticker:
             regular_hours = data.between_time("09:30", "16:00")
 
             # Group by date and get the last close of each day
-            grouped_days = regular_hours.groupby(regular_hours.index.date)
+            daily_closes = regular_hours.groupby(regular_hours.index.date).last()
 
-            if len(grouped_days) >= 3:
-                # Most recent full close (yesterday)
-                prev_close = grouped_days.last().iloc[-2]["Close"]
-                # Close before that
-                prev_prev_close = grouped_days.last().iloc[-3]["Close"]
-            elif len(grouped_days) == 2:
-                prev_close = grouped_days.last().iloc[-2]["Close"]
-                prev_prev_close = prev_close  # Fallback
+            if len(daily_closes) >= 4:
+                # Get the last 4 closes (most recent 3 for display + 1 to compare from)
+                recent_closes = daily_closes.tail(4)
             else:
-                prev_close = latest_price
-                prev_prev_close = prev_close  # Fallback
+                recent_closes = daily_closes
 
-            # Change from previous close to current
-            percent_change = ((latest_price - prev_close) / prev_close) * 100
-            change_color = "green" if percent_change >= 0 else "red"
+            close_dates = recent_closes.index.tolist()
+            close_values = recent_closes["Close"].tolist()
 
-            # Change from prior-to-previous close to previous close
-            prev_change = ((prev_close - prev_prev_close) / prev_prev_close) * 100
-            prev_color = "green" if prev_change >= 0 else "red"
+            # Display previous 3 closes and changes
+            for i in range(1, len(close_values)):
+                date_str = close_dates[i].strftime("%Y-%m-%d")
+                close_price = close_values[i]
+                prev_close_price = close_values[i - 1]
+                price_change = close_price - prev_close_price
+                percent_change = (price_change / prev_close_price) * 100 if prev_close_price != 0 else 0
+                color = "green" if percent_change >= 0 else "red"
 
-            # Display previous closing price and its change
-            st.markdown(
-                f"### Previous Close: ${prev_close:.2f} "
-                f"<span style='color:{prev_color}; font-size:18px'>({prev_change:+.2f}%)</span>",
-                unsafe_allow_html=True
-            )
+                st.markdown(
+                    f"### {date_str}: ${close_price:.2f} "
+                    f"<span style='color:{color}; font-size:16px'>({price_change:+.2f}, {percent_change:+.2f}%)</span>",
+                    unsafe_allow_html=True
+                )
 
-            # Display current price and percent change from previous close
+            # Display current price and change from most recent close
+            last_close_price = close_values[-1]
+            price_diff = latest_price - last_close_price
+            percent_diff = (price_diff / last_close_price) * 100 if last_close_price != 0 else 0
+            color = "green" if percent_diff >= 0 else "red"
+
             st.markdown(
                 f"### Current Price: ${latest_price:.2f} "
-                f"<span style='color:{change_color}; font-size:20px'>({percent_change:+.2f}%)</span>",
+                f"<span style='color:{color}; font-size:20px'>({percent_diff:+.2f}%)</span>",
                 unsafe_allow_html=True
             )
+
 
 
         # Create subplots for price and volume
