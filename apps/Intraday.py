@@ -79,37 +79,39 @@ if ticker:
 
 
 
-        # Create subplots for price and volume
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-        # Plot price
-        fig.add_trace(go.Scatter(
+        # --- Price Chart ---
+        price_fig = go.Figure()
+        price_fig.add_trace(go.Scatter(
             x=data.index,
             y=data["Close"],
             mode="lines",
-            name="Stock Price",
+            name="Price",
             line=dict(color="blue")
-        ), secondary_y=False)
+        ))
+        price_fig.update_layout(
+            title=f"{ticker} Intraday Price (Including Pre-market & After-hours)",
+            xaxis_title="Time",
+            yaxis_title="Price",
+            showlegend=True
+        )
+        st.plotly_chart(price_fig)
 
-        # Plot volume
-        fig.add_trace(go.Bar(
+        # --- Volume Chart ---
+        volume_fig = go.Figure()
+        volume_fig.add_trace(go.Bar(
             x=data.index,
             y=data["Volume"],
             name="Volume",
             marker=dict(color="grey")
-        ), secondary_y=True)
-
-        # Update layout
-        fig.update_layout(
-            title=f"{ticker} Intraday Prices (Including Pre-market & After-hours)",
+        ))
+        volume_fig.update_layout(
+            title=f"{ticker} Intraday Volume (Including Pre-market & After-hours)",
             xaxis_title="Time",
-            yaxis_title="Price",
-            legend_title="Market Data"
+            yaxis_title="Volume",
+            showlegend=True
         )
-        fig.update_yaxes(title_text="Volume", secondary_y=True)
+        st.plotly_chart(volume_fig)
 
-        # Display chart
-        st.plotly_chart(fig)
 
         # Show raw data (reversed for most recent on top)
         st.write(data[["Close", "Volume"]][::-1])
