@@ -9,12 +9,12 @@ st.title("📈 Normalized Closing Prices(Last 12 Months)")
 # Define tickers
 ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 #ticker_list = ["MSTY", "MAIN"]
-tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:3])
+tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:5])
 
 
-# Date range: last 12 months
+# Date range: last 6 months
 end_date = datetime.today()
-start_date = end_date - timedelta(days=365)
+start_date = end_date - timedelta(days=180)
 
 # Fetch data
 ticker_data = Ticker(tickers)

@@ -122,3 +122,39 @@ if ticker:
 
     except Exception as e:
         st.error(f"Error fetching data: {e}")
+
+st.sidebar.header("Current Prices")
+
+if tickers_list:
+    for t in tickers_list:
+        try:
+            yf_t = yf.Ticker(t)
+            
+            # Get today's intraday with pre/post
+            t_data = yf_t.history(period="1d", interval="1m", prepost=True)
+            
+            # Get last 5 days to pick yesterday's close
+            daily_data = yf_t.history(period="5d", interval="1d")
+            
+            if not t_data.empty and not daily_data.empty:
+                latest = t_data["Close"].iloc[-1]
+                
+                # Yesterday's close (last row excluding today)
+                if len(daily_data) > 1:
+                    prev_close = daily_data["Close"].iloc[-2]
+                else:
+                    prev_close = daily_data["Close"].iloc[-1]
+                
+                price_diff = latest - prev_close
+                percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
+                color = "green" if percent_diff >= 0 else "red"
+                
+                st.sidebar.markdown(
+                    f"**{t}**: ${latest:.2f} "
+                    f"<span style='color:{color}'>({percent_diff:+.2f}%)</span>",
+                    unsafe_allow_html=True
+                )
+            else:
+                st.sidebar.write(f"**{t}**: No data")
+        except Exception as e:
+            st.sidebar.write(f"**{t}**: Error ({e})")
