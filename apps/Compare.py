@@ -9,7 +9,7 @@ st.title("📈 Normalized Closing Prices(Last 12 Months)")
 # Define tickers
 ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 #ticker_list = ["MSTY", "MAIN"]
-tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:5])
+tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:7])
 
 
 # Date range: last 6 months
@@ -43,7 +43,7 @@ if isinstance(history, pd.DataFrame) and not history.empty:
             line=dict(width=2)
         ))
     fig.update_layout(
-        title="Normalized Closing Prices: MSTY vs MAIN",
+        title=f"Normalized Closing Prices: {', '.join(tickers)}",
         xaxis_title="Date",
         yaxis_title="Normalized Price (Starting at 100)",
         template="plotly_white",
