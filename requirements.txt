@@ -8,3 +8,5 @@ yahooquery
 plotly
 prophet
 yfinance
+mibian
+scikit-learn
