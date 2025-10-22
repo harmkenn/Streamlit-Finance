@@ -1,13 +1,13 @@
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import datetime
 
-st.title("Intraday Stock Prices (Including Pre-market & After-hours)")
+st.set_page_config(page_title="Intraday Stock Prices", layout="wide")
+st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours)")
 
-# User input for stock symbol
+# --- User input for stock symbol ---
 col1, col2, col3 = st.columns(3)
 with col1:
     # Get tickers from session state and split into a list
@@ -19,6 +19,7 @@ with col1:
 with col3:
     refresh_button = st.button("Refresh")
 
+# --- Main Chart Area ---
 if ticker:
     try:
         # Fetch stock data (5-minute interval for 5 days to capture extended hours)
@@ -77,8 +78,6 @@ if ticker:
                 unsafe_allow_html=True
             )
 
-
-
         # --- Price Chart ---
         price_fig = go.Figure()
         price_fig.add_trace(go.Scatter(
@@ -112,7 +111,6 @@ if ticker:
         )
         st.plotly_chart(volume_fig)
 
-
         # Show raw data (reversed for most recent on top)
         st.write(data[["Close", "Volume"]][::-1])
 
@@ -123,38 +121,59 @@ if ticker:
     except Exception as e:
         st.error(f"Error fetching data: {e}")
 
-st.sidebar.header("Current Prices")
+# --- Sidebar Section ---
+st.sidebar.header("📊 Current Prices & 30-Day Range")
 
 if tickers_list:
     for t in tickers_list:
         try:
             yf_t = yf.Ticker(t)
-            
+
             # Get today's intraday with pre/post
             t_data = yf_t.history(period="1d", interval="1m", prepost=True)
-            
-            # Get last 5 days to pick yesterday's close
-            daily_data = yf_t.history(period="5d", interval="1d")
-            
-            if not t_data.empty and not daily_data.empty:
+
+            # Get last 30 days for high/low range
+            month_data = yf_t.history(period="1mo", interval="1d")
+
+            if not t_data.empty and not month_data.empty:
                 latest = t_data["Close"].iloc[-1]
-                
-                # Yesterday's close (last row excluding today)
-                if len(daily_data) > 1:
-                    prev_close = daily_data["Close"].iloc[-2]
+
+                # Yesterday's close
+                if len(month_data) > 1:
+                    prev_close = month_data["Close"].iloc[-2]
                 else:
-                    prev_close = daily_data["Close"].iloc[-1]
-                
+                    prev_close = month_data["Close"].iloc[-1]
+
                 price_diff = latest - prev_close
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 color = "green" if percent_diff >= 0 else "red"
-                
+
+                # 30-day high/low
+                high_30d = month_data["High"].max()
+                low_30d = month_data["Low"].min()
+
+                # Position of current price in 30-day range
+                position = (latest - low_30d) / (high_30d - low_30d) * 100 if high_30d != low_30d else 50
+
+                # Simple bar indicator
+                bar_html = f"""
+                <div style='width:100%; height:6px; background:#ddd; border-radius:3px; margin-top:2px; margin-bottom:6px; position:relative;'>
+                    <div style='position:absolute; left:{position}%; top:0; transform:translateX(-50%);
+                                width:4px; height:6px; background:{color}; border-radius:2px;'></div>
+                </div>
+                <small>30-day range: ${low_30d:.2f} – ${high_30d:.2f}</small>
+                """
+
+                # Display
                 st.sidebar.markdown(
                     f"**{t}**: ${latest:.2f} "
                     f"<span style='color:{color}'>({percent_diff:+.2f}%)</span>",
                     unsafe_allow_html=True
                 )
+                st.sidebar.markdown(bar_html, unsafe_allow_html=True)
+
             else:
                 st.sidebar.write(f"**{t}**: No data")
+
         except Exception as e:
             st.sidebar.write(f"**{t}**: Error ({e})")
