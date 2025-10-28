@@ -1,96 +1,57 @@
+import streamlit as st
 import yfinance as yf
 import pandas as pd
-import streamlit as st
-import plotly.graph_objects as go
-import datetime as dt
 
+st.set_page_config(page_title="Stock Summary", layout="wide")
+st.title("📊 Stock Summary Dashboard")
 
-# Inputs for strategy parameters
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    ticker = st.text_input("Ticker", "TQQQ")
-    chunk = st.number_input("Chunk Size", min_value=.05, max_value=1.1, value=.25, step=.05, format="%.3f")
-with c2:
-    start_cash = st.number_input("Starting Cash ($)", min_value=0, value=100000, step=10000)
-    money_in_shares = st.number_input("Money in Shares", min_value=0, value=100000, step=10000)
-with c3:
-    sell_pct = st.number_input("Sell Percentage Trigger (%)", min_value=0.0, max_value=10.0, value=2.0, step=0.1)
-    buy_pct = st.number_input("Buy Percentage Trigger (%)", min_value=0.0, max_value=10.0, value=2.0, step=0.1)
-with c4:
-    start_date = st.date_input("Select start date", value=dt.date(2019, 1, 1), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())  # replace with your desired start date
-    end_date = st.date_input("Select end date", value=dt.date.today(), min_value=dt.date(2010, 1, 1), max_value=dt.date.today())  # replace with your desired start date
+# --- Input for tickers ---
+st.markdown("Enter a comma-separated list of stock symbols (e.g. AAPL, MSFT, NVDA):")
+tickers_input = st.text_input("Tickers", value=st.session_state.get("tickers", "AAPL, MSFT, NVDA"))
+st.session_state["tickers"] = tickers_input  # store tickers in session state
+tickers_list = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 
-# Step 2: Fetch historical data
-data = yf.download(ticker, start=start_date, end=end_date, interval='1d')
-data = data.drop(['Volume', 'Adj Close'], axis=1)
+refresh_button = st.button("🔄 Refresh Data")
 
-# Step 3: Implement the Buy and Hold Strategy
-def buy_and_hold(data,  bh_num_shares):
-    data['Hold Value'] = bh_num_shares * data['Close']
-    return data
+# --- Main Table ---
+if tickers_list:
+    rows = []
 
-# Step 4: Implement the Intraday Trading Strategy
-def intraday_trading(data, start_cash, num_shares, sell_pct=2, buy_pct=2):
-    cash = start_cash
-    shares = num_shares
-    
-    for i in range(1, len(data)):
-        high = data['High'].iloc[i]
-        low = data['Low'].iloc[i]
-        close = data['Close'].iloc[i-1]  # Previous close
-        up = data['Close'].iloc[i-1]*(1+sell_pct/100)  # Target price for selling
-        down = data['Close'].iloc[i-1]*(1-buy_pct/100)
-        
-        # Sell shares on spike
-        if (high - close) / close * 100 > sell_pct:
-            shares_to_sell = shares * chunk  # Sell 10% of shares
-            cash += shares_to_sell * up
-            shares -= shares_to_sell
-        
-        # Buy shares on dip
-        if (close - low) / close * 100 > buy_pct:
-            shares_to_buy = int(cash / down * chunk)  # Buy 10% of cash value
-            cash -= shares_to_buy * down
-            shares += shares_to_buy
-        
-        # Track portfolio value
-        data.loc[data.index[i], 'Trade Value'] = shares * close
-        data.loc[data.index[i], 'Cash'] = cash
-        data.loc[data.index[i], 'Total Value Trade'] = data['Trade Value'].iloc[i] + cash
-    
-    return data
+    for t in tickers_list:
+        try:
+            yf_t = yf.Ticker(t)
+            t_data = yf_t.history(period="1d", interval="1m", prepost=True)
+            month_data = yf_t.history(period="1mo", interval="1d")
 
-# Step 5: Run both strategies
-bh_num_shares = (start_cash + money_in_shares) / data['Close'].iloc[0]  # Initial shares
-idt_num_shares = money_in_shares / data['Close'].iloc[0]  # Initial shares
-buy_hold_result = buy_and_hold(data.copy(), bh_num_shares)
+            if not t_data.empty and not month_data.empty:
+                latest = t_data["Close"].iloc[-1]
+                prev_close = month_data["Close"].iloc[-2] if len(month_data) > 1 else month_data["Close"].iloc[-1]
+                high_30d = month_data["High"].max()
+                low_30d = month_data["Low"].min()
 
-trade_result = intraday_trading(data.copy(), start_cash, idt_num_shares, sell_pct=sell_pct, buy_pct=buy_pct)
+                price_diff = latest - prev_close
+                percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
+                position = (latest - low_30d) / (high_30d - low_30d) * 100 if high_30d != low_30d else 50
 
-# Step 7: Display Data Summary
-st.subheader("Portfolio Value Summary")
-st.write("Buy and Hold Final Value: ${:,.2f}".format(buy_hold_result['Hold Value'].iloc[-1]))
-st.write("Intraday Trading Final Value: ${:,.2f}".format(trade_result['Total Value Trade'].iloc[-1]))
+                rows.append({
+                    "Ticker": t,
+                    "Last Price": f"${latest:.2f}",
+                    "Change": f"{price_diff:+.2f}",
+                    "Change %": f"{percent_diff:+.2f}%",
+                    "30d Low": f"${low_30d:.2f}",
+                    "30d High": f"${high_30d:.2f}",
+                    "Range Position %": f"{position:.1f}%"
+                })
+            else:
+                rows.append({"Ticker": t, "Error": "No data"})
 
-# Step 6: Plot the performance comparison
-st.subheader("Strategy Performance Comparison")
+        except Exception as e:
+            rows.append({"Ticker": t, "Error": str(e)})
 
-fig = go.Figure()
+    df = pd.DataFrame(rows)
+    st.dataframe(df, use_container_width=True)
 
-fig.add_trace(go.Scatter(x=buy_hold_result.index, y=buy_hold_result['Hold Value'],
-                          mode='lines', name='Buy and Hold', line=dict(color='blue')))
-fig.add_trace(go.Scatter(x=trade_result.index, y=trade_result['Total Value Trade'],
-                          mode='lines', name='Intraday Trading', line=dict(color='green')))
-
-fig.update_layout(
-    title=f"Buy and Hold vs Intraday Trading with {ticker}",
-    xaxis_title="Date",
-    yaxis_title="Portfolio Value ($)",
-    legend_title_text="Strategy",
-)
-
-st.write(fig)
-
-st.write(buy_hold_result)
-
-
+    if refresh_button:
+        st.experimental_rerun()
+else:
+    st.info("👆 Enter at least one ticker symbol to display stock information.")
