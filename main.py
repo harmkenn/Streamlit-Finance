@@ -36,6 +36,7 @@ tickers_list = st.sidebar.text_area(
 )
 st.session_state["tickers"] = tickers_list
 
+
 # Import and run the selected sub-app
 if selected_sub_app:
     spec = importlib.util.spec_from_file_location(selected_sub_app, os.path.join(sub_apps_folder, selected_sub_app))
