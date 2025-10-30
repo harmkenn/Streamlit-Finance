@@ -13,9 +13,10 @@ tickers_list = [t.strip().upper() for t in tickers_input.split(",") if t.strip()
 
 refresh_button = st.button("🔄 Refresh Data")
 
-# --- Main Table ---
+# --- Main Columns ---
 if tickers_list:
-    rows = []
+    if refresh_button:
+        st.experimental_rerun()
 
     for t in tickers_list:
         try:
@@ -33,25 +34,20 @@ if tickers_list:
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 position = (latest - low_30d) / (high_30d - low_30d) * 100 if high_30d != low_30d else 50
 
-                rows.append({
-                    "Ticker": t,
-                    "Last Price": f"${latest:.2f}",
-                    "Change": f"{price_diff:+.2f}",
-                    "Change %": f"{percent_diff:+.2f}%",
-                    "30d Low": f"${low_30d:.2f}",
-                    "30d High": f"${high_30d:.2f}",
-                    "Range Position %": f"{position:.1f}%"
-                })
+                # Display data in columns
+                col = st.columns(1)[0]  # Create a single column for each ticker
+                with col:
+                    st.subheader(f"📈 {t}")
+                    st.metric("Last Price", f"${latest:.2f}")
+                    st.metric("Change", f"{price_diff:+.2f}")
+                    st.metric("Change %", f"{percent_diff:+.2f}%")
+                    st.metric("30d Low", f"${low_30d:.2f}")
+                    st.metric("30d High", f"${high_30d:.2f}")
+                    st.metric("Range Position %", f"{position:.1f}%")
             else:
-                rows.append({"Ticker": t, "Error": "No data"})
+                st.warning(f"No data available for {t}")
 
         except Exception as e:
-            rows.append({"Ticker": t, "Error": str(e)})
-
-    df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True)
-
-    if refresh_button:
-        st.experimental_rerun()
+            st.error(f"Error fetching data for {t}: {e}")
 else:
     st.info("👆 Enter at least one ticker symbol to display stock information.")
