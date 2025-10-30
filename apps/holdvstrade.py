@@ -16,6 +16,7 @@ refresh_button = st.button("🔄 Refresh Data")
 # --- Main Columns ---
 if tickers_list:
     if refresh_button:
+        # Rerun the app only when the refresh button is clicked
         st.experimental_rerun()
 
     for t in tickers_list:
