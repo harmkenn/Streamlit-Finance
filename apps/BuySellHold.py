@@ -10,12 +10,12 @@ st.title("Stock OHLC Plot with Indicators, Moving Averages, and Dividends")
 # Date inputs
 col1, col2, col3 = st.columns(3)
 with col1:
-    start_date = st.date_input("Start Date", datetime.today() - timedelta(days=5 * 365))
-with col2:
-    end_date = st.date_input("End Date", datetime.today())
-with col3:
     tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
     ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else st.text_input("Enter ticker").upper()
+with col2:
+    start_date = st.date_input("Start Date", datetime.today() - timedelta(days=5 * 365))
+with col3:
+    end_date = st.date_input("End Date", datetime.today())
 
 # --- Indicator Functions ---
 def calculate_rsi(data, window=14):
