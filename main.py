@@ -16,7 +16,7 @@ sub_app_names = {
     'OptionCall.py': 'Option Calls',
     'OptionWeek.py': 'Option Week',
     'NASfromIndex.py': 'Predict Nasdaq',
-    'holdvstrade.py': 'new page'
+    'News.py': 'News'
 }
 
 # Get a list of .py files from the SubApps folder
