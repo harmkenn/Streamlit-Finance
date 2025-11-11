@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
 
+# Page configuration
 st.set_page_config(page_title="Intraday Stock Prices", layout="wide")
 st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours)")
 
@@ -138,11 +139,8 @@ if tickers_list:
             if not t_data.empty and not month_data.empty:
                 latest = t_data["Close"].iloc[-1]
 
-                # Yesterday's close
-                if len(month_data) > 1:
-                    prev_close = month_data["Close"].iloc[-2]
-                else:
-                    prev_close = month_data["Close"].iloc[-1]
+                # Yesterday's close (most recent close)
+                prev_close = month_data["Close"].iloc[-1]  # Use the last available close
 
                 price_diff = latest - prev_close
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
