@@ -15,7 +15,7 @@ sub_app_names = {
     'Whatif.py': 'Last Year',
     'OptionCall.py': 'Option Calls',
     'OptionWeek.py': 'Option Week',
-    'NASfromIndex.py': 'Predict Nasdaq',
+    'Predict.py': 'Predict Nasdaq',
     'News.py': 'News'
 }
 
