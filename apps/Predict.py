@@ -52,6 +52,9 @@ if st.button("🚀 Analyze Market"):
                     df = df[['Date', 'Close']]
                     df.rename(columns={'Date': 'ds', 'Close': 'y'}, inplace=True)
 
+                    # Remove timezone from the 'ds' column
+                    df['ds'] = df['ds'].dt.tz_localize(None)  # Fix timezone issue
+
                     # Train Prophet model
                     model = Prophet(daily_seasonality=True)
                     model.fit(df)
