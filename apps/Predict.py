@@ -51,7 +51,7 @@ def get_inflation_rate(api_key):
     obs = response['observations']
     latest = float(obs[0]['value'])
     prev = float(obs[1]['value'])
-    yoy_change = ((latest - prev) / prev) * 10
+    yoy_change = ((latest - prev) / prev) * 100
     return f"{yoy_change:.2f}% ({obs[0]['date']})"
 
 @st.cache_data(ttl=3600)
@@ -139,7 +139,7 @@ if st.button("🚀 Analyze Market"):
                     # Macroeconomic data (live from FRED)
                     st.markdown("### Macroeconomic Data:")
                     economic_data = {
-                        "Inflation Rate": get_inflation_rate(api_key),
+                        "Inflation Rate this month": get_inflation_rate(api_key),
                         "Unemployment Rate": get_unemployment_rate(api_key),
                         "Retail Sales Growth": get_retail_sales_growth(api_key)
                     }
