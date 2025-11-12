@@ -137,11 +137,13 @@ if tickers_list:
             month_data = yf_t.history(period="1mo", interval="1d")
 
             if not t_data.empty and not month_data.empty:
+                # Get yesterday's close (most recent close before today)
+                prev_close = month_data["Close"].iloc[-2]  # Use the second-to-last available close
+
+                # Get the latest price
                 latest = t_data["Close"].iloc[-1]
 
-                # Yesterday's close (most recent close)
-                prev_close = month_data["Close"].iloc[-1]  # Use the last available close
-
+                # Calculate price difference and percentage change from yesterday's close
                 price_diff = latest - prev_close
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 color = "green" if percent_diff >= 0 else "red"
