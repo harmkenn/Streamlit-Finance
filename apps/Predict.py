@@ -51,7 +51,7 @@ def get_inflation_rate(api_key):
     obs = response['observations']
     latest = float(obs[0]['value'])
     prev = float(obs[1]['value'])
-    yoy_change = ((latest - prev) / prev) * 100
+    yoy_change = ((latest - prev) / prev) * 10
     return f"{yoy_change:.2f}% ({obs[0]['date']})"
 
 @st.cache_data(ttl=3600)
