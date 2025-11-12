@@ -85,37 +85,28 @@ if st.button("🚀 Analyze Market"):
                     fig.update_layout(title="Nasdaq Price Trend", xaxis_title="Date", yaxis_title="Price (USD)")
                     st.plotly_chart(fig)
 
-                    # Macroeconomic data (example using dummy data)
+                    # Fetch real macroeconomic data using FRED API
                     st.markdown("### Macroeconomic Data:")
                     st.write("Fetching economic data...")
-                    # Example: Replace with actual API calls
-                    economic_data = {
-                        "Inflation Rate": "3.2%",
-                        "Unemployment Rate": "3.8%",
-                        "Retail Sales Growth": "1.5%"
-                    }
-                    st.json(economic_data)
 
-                    # Market sentiment (example using dummy data)
-                    st.markdown("### Market Sentiment:")
-                    sentiment_data = {
-                        "VIX (Volatility Index)": "18.5 (Moderate Fear)",
-                        "Put/Call Ratio": "0.85 (Neutral)"
-                    }
-                    st.json(sentiment_data)
+                    # FRED API key (use Streamlit Secrets for security)
+                    API_KEY = st.secrets["api_keys"]["fred_api_key"]
 
-                    # External events (example using dummy data)
-                    st.markdown("### External Events:")
-                    st.write("Recent news headlines:")
-                    news = [
-                        "Tech stocks rally as inflation data shows signs of cooling.",
-                        "Federal Reserve signals no immediate rate hikes.",
-                        "Geopolitical tensions ease after peace talks."
-                    ]
-                    for headline in news:
-                        st.markdown(f"- {headline}")
+                    # FRED API URL for Inflation Rate (CPIAUCSL - Consumer Price Index for All Urban Consumers)
+                    inflation_url = f"https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key={API_KEY}&file_type=json"
 
-                    # Prediction
+                    # Fetch inflation rate data
+                    response = requests.get(inflation_url)
+                    if response.status_code == 200:
+                        inflation_data = response.json()
+                        latest_observation = inflation_data["observations"][-1]
+                        inflation_rate = float(latest_observation["value"])
+                        inflation_date = latest_observation["date"]
+                        st.markdown(f"- **Inflation Rate**: {inflation_rate:.2f}% (as of {inflation_date})")
+                    else:
+                        st.error("❌ Failed to fetch inflation rate data.")
+
+                    # Example prediction logic (dummy data for demonstration)
                     st.markdown("### Prediction for the Next 5 Days:")
                     st.write("Based on the analysis:")
                     st.markdown("""
@@ -132,6 +123,6 @@ if st.button("🚀 Analyze Market"):
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666;'>
-    <p>Built with Streamlit, yFinance, and Plotly | Powered by Python</p>
+    <p>Built with Streamlit, FRED API, yFinance, and Plotly | Powered by Python</p>
 </div>
 """, unsafe_allow_html=True)
