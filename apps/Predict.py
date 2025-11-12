@@ -100,7 +100,7 @@ if st.button("🚀 Analyze Market"):
                     if response.status_code == 200:
                         inflation_data = response.json()
                         latest_observation = inflation_data["observations"][-1]
-                        inflation_rate = float(latest_observation["value"])
+                        inflation_rate = float(latest_observation["value"])/100
                         inflation_date = latest_observation["date"]
                         st.markdown(f"- **Inflation Rate**: {inflation_rate:.2f}% (as of {inflation_date})")
                     else:
