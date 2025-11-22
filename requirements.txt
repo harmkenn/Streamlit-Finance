@@ -10,4 +10,3 @@ prophet
 yfinance
 mibian
 scikit-learn
-tensorflow
