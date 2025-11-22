@@ -25,7 +25,7 @@ Simulating a strategy where:
 # Load daily TQQQ data (12 months)
 # -----------------------------------------
 ticker = "TQQQ"
-df = yf.download(ticker, period="1y", interval="1d")
+df = yf.download(ticker, period="3y", interval="1d")
 
 if df.empty:
     st.error("Error: No data returned.")
