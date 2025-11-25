@@ -12,10 +12,10 @@ trade_amount = 10000
 
 st.sidebar.header("Strategy Parameters")
 
-drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 5) / 100
-spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 10) / 100
-drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 10) / 100
-spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 20) / 100
+drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 4) / 100
+spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 7) / 100
+drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 8) / 100
+spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 10) / 100
 
 ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 20)
 
