@@ -2,27 +2,31 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.title("TQQQ ±5% & ±10% Trigger Strategy (MA-Adjusted) vs Buy-and-Hold")
+st.title("TQQQ Trigger Strategy (MA-Adjusted) vs Buy-and-Hold")
 
 # -----------------------------------------
-# Strategy parameters
+# Strategy parameters with sliders
 # -----------------------------------------
 initial_cash = 100000
 trade_amount = 10000
 
-drop_pct_5 = 0.95     # 5% drop
-spike_pct_5 = 1.05    # 5% rise
-drop_pct_10 = 0.90    # 10% drop
-spike_pct_10 = 1.10   # 10% rise
+st.sidebar.header("Strategy Parameters")
+
+drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 5) / 100
+spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 5) / 100
+drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 10) / 100
+spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 10) / 100
+
+ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 20)
 
 st.write(f"""
 Simulating a strategy where:
 
 - Start with **${initial_cash:,}** cash  
-- Buy/Sell **$10,000** on **5% or 10% intraday moves**  
-- Apply **MA10 filter**:  
-  - *Buy price = min(trigger, MA10)*  
-  - *Sell price = max(trigger, MA10)*  
+- Buy/Sell **${trade_amount:,}** on **{int(drop_pct_5*100)}% or {int(drop_pct_10*100)}% intraday moves**  
+- Apply **MA{ma_period} filter**:  
+  - *Buy price = min(trigger, MA{ma_period})*  
+  - *Sell price = max(trigger, MA{ma_period})*  
 """)
 
 # -----------------------------------------
@@ -38,8 +42,8 @@ if df.empty:
 df = df.astype(float)
 df["PrevClose"] = df["Close"].shift(1)
 
-# 10-day moving average
-df["MA10"] = df["Close"].rolling(10).mean()
+# Moving average
+df[f"MA{ma_period}"] = df["Close"].rolling(ma_period).mean()
 
 df = df.dropna()
 
@@ -47,46 +51,46 @@ df = df.dropna()
 # Next-day trigger preview
 # -----------------------------------------
 last_close = float(df["Close"].iloc[-1])
-ma10_last = float(df["MA10"].iloc[-1])
+ma_last = float(df[f"MA{ma_period}"].iloc[-1])
 
 # 5% triggers
-buy_5_price = last_close * drop_pct_5
-sell_5_price = last_close * spike_pct_5
+buy_5_price = last_close * (1 - drop_pct_5)
+sell_5_price = last_close * (1 + spike_pct_5)
 
 # 10% triggers
-buy_10_price = last_close * drop_pct_10
-sell_10_price = last_close * spike_pct_10
+buy_10_price = last_close * (1 - drop_pct_10)
+sell_10_price = last_close * (1 + spike_pct_10)
 
 st.subheader("Next Day Trigger Preview")
 st.write(f"Previous Close: **${last_close:,.2f}**")
-st.write(f"10-Day Moving Average: **${ma10_last:,.2f}**")
+st.write(f"{ma_period}-Day Moving Average: **${ma_last:,.2f}**")
 
 # 5% and 10% preview table
 preview_df = pd.DataFrame({
     "Trigger Type": ["Buy 5%", "Sell 5%", "Buy 10%", "Sell 10%"],
     "Raw Trigger Price": [buy_5_price, sell_5_price, buy_10_price, sell_10_price],
-    "Adjusted for MA10": [
-        min(buy_5_price, ma10_last),
-        max(sell_5_price, ma10_last),
-        min(buy_10_price, ma10_last),
-        max(sell_10_price, ma10_last)
+    f"Adjusted for MA{ma_period}": [
+        min(buy_5_price, ma_last),
+        max(sell_5_price, ma_last),
+        min(buy_10_price, ma_last),
+        max(sell_10_price, ma_last)
     ],
     "Shares at Trigger Price": [
-        trade_amount / min(buy_5_price, ma10_last),
-        trade_amount / max(sell_5_price, ma10_last),
-        trade_amount / min(buy_10_price, ma10_last),
-        trade_amount / max(sell_10_price, ma10_last)
+        trade_amount / min(buy_5_price, ma_last),
+        trade_amount / max(sell_5_price, ma_last),
+        trade_amount / min(buy_10_price, ma_last),
+        trade_amount / max(sell_10_price, ma_last)
     ]
 })
 
 st.dataframe(preview_df.style.format({
     "Raw Trigger Price": "${:,.2f}",
-    "Adjusted for MA10": "${:,.2f}",
+    f"Adjusted for MA{ma_period}": "${:,.2f}",
     "Shares at Trigger Price": "{:,.4f}"
 }))
 
 # -----------------------------------------
-# Simulate Strategy with MA10 adjustment
+# Simulate Strategy with MA adjustment
 # -----------------------------------------
 cash = float(initial_cash)
 shares = 0.0
@@ -98,15 +102,19 @@ for idx, row in df.iterrows():
     day_low = float(row["Low"])
     day_high = float(row["High"])
     day_close = float(row["Close"])
-    ma10 = float(row["MA10"])
+    ma = float(row[f"MA{ma_period}"])
 
-    # Raw 5% triggers
-    buy_5 = prev_close * drop_pct_5
-    sell_5 = prev_close * spike_pct_5
+    # Raw triggers
+    buy_5 = prev_close * (1 - drop_pct_5)
+    sell_5 = prev_close * (1 + spike_pct_5)
+    buy_10 = prev_close * (1 - drop_pct_10)
+    sell_10 = prev_close * (1 + spike_pct_10)
 
-    # Apply MA10 filter:
-    buy_5_adj = min(buy_5, ma10)
-    sell_5_adj = max(sell_5, ma10)
+    # Adjusted for MA
+    buy_5_adj = min(buy_5, ma)
+    sell_5_adj = max(sell_5, ma)
+    buy_10_adj = min(buy_10, ma)
+    sell_10_adj = max(sell_10, ma)
 
     # BUY 5%
     if day_low <= buy_5_adj:
@@ -125,6 +133,23 @@ for idx, row in df.iterrows():
             total_value = cash + shares * sell_5_adj
             trades.append([idx, "SELL 5% (MA-adjusted)", sell_5_adj, qty, cash, shares, total_value])
 
+    # BUY 10%
+    if day_low <= buy_10_adj:
+        qty = trade_amount / buy_10_adj
+        cash -= trade_amount
+        shares += qty
+        total_value = cash + shares * buy_10_adj
+        trades.append([idx, "BUY 10% (MA-adjusted)", buy_10_adj, qty, cash, shares, total_value])
+
+    # SELL 10%
+    if day_high >= sell_10_adj:
+        qty = trade_amount / sell_10_adj
+        if shares >= qty:
+            cash += trade_amount
+            shares -= qty
+            total_value = cash + shares * sell_10_adj
+            trades.append([idx, "SELL 10% (MA-adjusted)", sell_10_adj, qty, cash, shares, total_value])
+
     # Record daily portfolio value
     portfolio_value_over_time.append([idx, cash + shares * day_close])
 
@@ -141,7 +166,6 @@ buy_hold_value = df["Close"] * initial_shares
 # Display Results
 # -----------------------------------------
 st.subheader("Final Results")
-
 st.write(f"**Strategy Final Value:** ${final_value:,.2f}")
 st.write(f"**Buy-and-Hold Final Value:** ${float(buy_hold_value.iloc[-1]):,.2f}")
 
