@@ -15,9 +15,9 @@ st.sidebar.header("Strategy Parameters")
 drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 4) / 100
 spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 7) / 100
 drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 8) / 100
-spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 10) / 100
+spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 14) / 100
 
-ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 5)
+ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 7)
 
 st.write(f"""
 Simulating a strategy where:
@@ -116,8 +116,8 @@ for idx, row in df.iterrows():
     buy_10_adj = min(buy_10, ma)
     sell_10_adj = max(sell_10, ma)
 
-    # BUY 5%
-    if day_low <= buy_5_adj:
+    # BUY 5% (only if cash available)
+    if day_low <= buy_5_adj and cash >= trade_amount:
         qty = trade_amount / buy_5_adj
         cash -= trade_amount
         shares += qty
@@ -133,8 +133,8 @@ for idx, row in df.iterrows():
             total_value = cash + shares * sell_5_adj
             trades.append([idx, "SELL 5% (MA-adjusted)", sell_5_adj, qty, cash, shares, total_value])
 
-    # BUY 10%
-    if day_low <= buy_10_adj:
+    # BUY 10% (only if cash available)
+    if day_low <= buy_10_adj and cash >= trade_amount:
         qty = trade_amount / buy_10_adj
         cash -= trade_amount
         shares += qty
