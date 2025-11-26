@@ -17,7 +17,7 @@ spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 7) / 
 drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 8) / 100
 spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 10) / 100
 
-ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 20)
+ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 5)
 
 st.write(f"""
 Simulating a strategy where:
