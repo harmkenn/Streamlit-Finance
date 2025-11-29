@@ -12,7 +12,7 @@ trade_amount = 10000
 
 st.sidebar.header("ATR Strategy Parameters")
 
-atr_period = st.sidebar.slider("ATR Period", 5, 30, 10)
+atr_period = st.sidebar.slider("ATR Period", 5, 30, 14)
 atr_mult_buy = st.sidebar.slider("ATR Buy Multiplier", 0.5, 3.0, .5)
 atr_mult_sell = st.sidebar.slider("ATR Sell Multiplier", 0.5, 3.0, 1.5)
 
