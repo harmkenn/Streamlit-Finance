@@ -10,3 +10,4 @@ prophet
 yfinance
 mibian
 scikit-learn
+statsmodels
