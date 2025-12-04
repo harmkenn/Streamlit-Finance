@@ -123,7 +123,7 @@ if ticker:
         st.error(f"Error fetching data: {e}")
 
 # --- Sidebar Section ---
-st.sidebar.header("📊 Current Prices & 30-Day Range")
+st.sidebar.header("📊 Current Prices & 60-Day Range")
 
 if tickers_list:
     for t in tickers_list:
@@ -133,8 +133,8 @@ if tickers_list:
             # Get today's intraday with pre/post
             t_data = yf_t.history(period="1d", interval="1m", prepost=True)
 
-            # Get last 30 days for high/low range
-            month_data = yf_t.history(period="1mo", interval="1d")
+            # Get last 60 days for high/low range
+            month_data = yf_t.history(period="2mo", interval="1d")
 
             if not t_data.empty and not month_data.empty:
                 # Get yesterday's close (most recent close before today)
@@ -148,12 +148,12 @@ if tickers_list:
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 color = "green" if percent_diff >= 0 else "red"
 
-                # 30-day high/low
-                high_30d = month_data["High"].max()
-                low_30d = month_data["Low"].min()
+                # 60-day high/low
+                high_60d = month_data["High"].max()
+                low_60d = month_data["Low"].min()
 
-                # Position of current price in 30-day range
-                position = (latest - low_30d) / (high_30d - low_30d) * 100 if high_30d != low_30d else 50
+                # Position of current price in 60-day range
+                position = (latest - low_60d) / (high_60d - low_60d) * 100 if high_60d != low_60d else 50
 
                 # Simple bar indicator
                 bar_html = f"""
@@ -161,7 +161,7 @@ if tickers_list:
                     <div style='position:absolute; left:{position}%; top:0; transform:translateX(-50%);
                                 width:4px; height:6px; background:{color}; border-radius:2px;'></div>
                 </div>
-                <small>30-day range: ${low_30d:.2f} – ${high_30d:.2f}</small>
+                <small>60-day range: ${low_60d:.2f} – ${high_60d:.2f}</small>
                 """
 
                 # Display
