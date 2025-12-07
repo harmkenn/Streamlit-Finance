@@ -1,274 +1,191 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import yfinance as yf
-import datetime
+import pandas as pd
+import plotly.graph_objects as go
 
-# --- Performance Metrics Functions ---
+# -----------------------------
+# FUNCTIONS
+# -----------------------------
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-def calculate_mdd(series):
-    """Calculates Maximum Drawdown (%) of a value series."""
-    peak = series.expanding(min_periods=1).max()
-    drawdown = (series / peak) - 1
-    # Returns a Series containing the minimum value; this needs to be cast to float later.
-    return drawdown.min() 
+def compute_stoch_rsi(series, period=14, smooth_k=3, smooth_d=3):
+    rsi = compute_rsi(series, period)
+    min_rsi = rsi.rolling(period).min()
+    max_rsi = rsi.rolling(period).max()
+    stoch_rsi = (rsi - min_rsi) / (max_rsi - min_rsi) * 100
+    k = stoch_rsi.rolling(smooth_k).mean()
+    d = k.rolling(smooth_d).mean()
+    return k, d
 
-def calculate_cagr(final_value, initial_value, years):
-    """Calculates Compounded Annual Growth Rate (%)."""
-    if years <= 0:
-        return 0.0
-    # Ensure no division by zero if initial_value is zero, though unlikely with cash.
-    if initial_value == 0:
-        return 0.0
-    return (final_value / initial_value)**(1 / years) - 1
+def compute_macd(series, fast=12, slow=26, signal=9):
+    ema_fast = series.ewm(span=fast, adjust=False).mean()
+    ema_slow = series.ewm(span=slow, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    macd_signal = macd.ewm(span=signal, adjust=False).mean()
+    macd_hist = macd - macd_signal
+    return macd, macd_signal, macd_hist
 
-def calculate_sharpe_ratio(returns, risk_free_rate=0.015):
-    """Calculates Sharpe Ratio (Annualized)."""
-    if returns.empty:
-        return 0.0
-    
-    # Calculate daily excess returns
-    # Assuming 252 trading days per year
-    excess_returns = returns - (risk_free_rate / 252)
-    
-    # Annualize based on 252 trading days
-    return np.sqrt(252) * excess_returns.mean() / excess_returns.std()
+def compute_ema(series, span):
+    return series.ewm(span=span, adjust=False).mean()
 
+def compute_vwap(df):
+    return (df['Close'] * df['Volume']).cumsum() / df['Volume'].cumsum()
 
-# ---------------------------------------------------------
-# Streamlit Configuration and Parameters
-# ---------------------------------------------------------
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(page_title="Intraday Stock Dashboard", layout="wide")
+st.title("📈 Advanced Intraday Stock Dashboard (RSI, MACD, Stochastic RSI, EMA & VWAP)")
 
-st.set_page_config(layout="wide")
-st.title("TQQQ ATR-Based Dip & Rip Strategy Backtester 📈")
-ticker = "TQQQ"
+# -----------------------------
+# USER INPUTS
+# -----------------------------
+col1, col2, col3 = st.columns(3)
 
-# --- Sidebar for Parameters ---
-st.sidebar.header("Strategy Parameters")
+with col1:
+    tickers_input = st.text_input("Enter stock tickers (comma-separated, e.g., AAPL, MSFT, TQQQ)")
+    tickers_list = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else None
 
-# Strategy inputs
-initial_cash = st.sidebar.number_input("Initial Cash ($)", value=100000, step=10000)
-trade_amount = st.sidebar.number_input("Trade Amount ($)", value=10000, step=1000)
+with col2:
+    rsi_period = st.number_input("RSI Period", min_value=5, max_value=50, value=14)
 
-st.sidebar.markdown("---")
+with col3:
+    refresh_button = st.button("Refresh")
 
-# ATR inputs
-atr_period = st.sidebar.slider("ATR Period", 5, 30, 14)
-atr_mult_buy = st.sidebar.slider("ATR Buy Multiplier", 0.1, 3.0, 0.5, 0.1)
-atr_mult_sell = st.sidebar.slider("ATR Sell Multiplier", 0.1, 3.0, 1.5, 0.1)
+# -----------------------------
+# FETCH DATA
+# -----------------------------
+if ticker:
+    try:
+        yf_ticker = yf.Ticker(ticker)
+        data = yf_ticker.history(period="5d", interval="5m", prepost=True)
+        if data.empty:
+            st.error("No data found for this ticker.")
+        else:
+            data = data.tz_convert("America/New_York")
 
-st.sidebar.markdown("---")
+        # -----------------------------
+        # INDICATORS
+        # -----------------------------
+        data["RSI"] = compute_rsi(data["Close"], period=rsi_period)
+        data["EMA_12"] = compute_ema(data["Close"], span=12)
+        data["EMA_26"] = compute_ema(data["Close"], span=26)
+        data["VWAP"] = compute_vwap(data)
+        data["MACD"], data["MACD_signal"], data["MACD_hist"] = compute_macd(data["Close"])
+        data["Stoch_K"], data["Stoch_D"] = compute_stoch_rsi(data["Close"])
 
-# Date range selection
-today = datetime.date.today()
-default_start_date = today - datetime.timedelta(days=3 * 365) # 3 years ago
-data_start_date = st.sidebar.date_input("Start Date", default_start_date)
-data_end_date = st.sidebar.date_input("End Date", today)
+        latest_price = data["Close"].iloc[-1]
+        rsi_latest = data["RSI"].iloc[-1]
+        stoch_latest = data["Stoch_K"].iloc[-1]
+        vwap_latest = data["VWAP"].iloc[-1]
 
-st.write(f"""
-Strategy rules for **{ticker}** ({data_start_date} to {data_end_date}):
+        # -----------------------------
+        # BUY/SELL SIGNALS BASED ON RSI
+        # -----------------------------
+        if rsi_latest <= 30:
+            rsi_signal = "BUY (Oversold)"
+        elif rsi_latest >= 70:
+            rsi_signal = "SELL (Overbought)"
+        else:
+            rsi_signal = "Neutral"
 
-- **Starting Cash:** **${initial_cash:,.0f}**
-- **Trade Size:** **${trade_amount:,.0f}** per trade
-- **ATR Period:** **{atr_period}**
-- **BUY Rule (Dip):** Execute a BUY trade if the day's $\\text{{Low}}$ drops to or below $\\text{{PrevClose}} - \\text{{ATR}} \\times \\mathbf{{{atr_mult_buy}}}$
-- **SELL Rule (Rip):** Execute a SELL trade if the day's $\\text{{High}}$ rises to or above $\\text{{PrevClose}} + \\text{{ATR}} \\times \\mathbf{{{atr_mult_sell}}}$
-- **Execution Price:** **Day's Closing Price** (Conservative backtest assumption)
-""")
+        st.markdown(f"**Current Price: ${latest_price:.2f} | RSI: {rsi_latest:.1f} → {rsi_signal}**")
 
-# ---------------------------------------------------------
-# Load Data & Compute ATR
-# ---------------------------------------------------------
+        # -----------------------------
+        # INTRADAY BUY/SELL PRICE RECOMMENDATIONS
+        # -----------------------------
+        intraday_low = data["Close"].iloc[-20:].min()   # last ~100 mins (5-min bars)
+        intraday_high = data["Close"].iloc[-20:].max()
 
-try:
-    df = yf.download(ticker, start=data_start_date, end=data_end_date, interval="1d")
-except Exception as e:
-    st.error(f"Error loading data for {ticker}: {e}")
-    st.stop()
+        buy_price = None
+        sell_price = None
 
-if df.empty:
-    st.error(f"Error: No data returned for {ticker} between {data_start_date} and {data_end_date}.")
-    st.stop()
+        if rsi_latest <= 30 and stoch_latest <= 20 and latest_price <= vwap_latest:
+            buy_price = intraday_low * 0.995
+        elif rsi_latest <= 40 and latest_price <= vwap_latest:
+            buy_price = intraday_low
 
-df = df.astype(float)
-df["PrevClose"] = df["Close"].shift(1)
+        if rsi_latest >= 70 and stoch_latest >= 80 and latest_price >= vwap_latest:
+            sell_price = intraday_high * 1.005
+        elif rsi_latest >= 60 and latest_price >= vwap_latest:
+            sell_price = intraday_high
 
-# Compute True Range (TR)
-high_low = df["High"] - df["Low"]
-high_pc = (df["High"] - df["PrevClose"]).abs()
-low_pc = (df["Low"] - df["PrevClose"]).abs()
+        if buy_price:
+            st.markdown(f"**💚 Recommended Buy Price:** ${buy_price:.2f}")
+        if sell_price:
+            st.markdown(f"**🔴 Recommended Sell Price:** ${sell_price:.2f}")
+        if not buy_price and not sell_price:
+            st.markdown("**⚪ No strong Buy/Sell signal currently.**")
 
-tr = pd.concat([high_low, high_pc, low_pc], axis=1).max(axis=1)
-df["ATR"] = tr.rolling(atr_period).mean()
+        # -----------------------------
+        # PRICE CHART WITH EMA & VWAP
+        # -----------------------------
+        price_fig = go.Figure()
+        price_fig.add_trace(go.Scatter(x=data.index, y=data["Close"], mode="lines", name="Close", line=dict(color="blue")))
+        price_fig.add_trace(go.Scatter(x=data.index, y=data["EMA_12"], mode="lines", name="EMA 12", line=dict(color="orange")))
+        price_fig.add_trace(go.Scatter(x=data.index, y=data["EMA_26"], mode="lines", name="EMA 26", line=dict(color="purple")))
+        price_fig.add_trace(go.Scatter(x=data.index, y=data["VWAP"], mode="lines", name="VWAP", line=dict(color="green", dash="dot")))
+        price_fig.update_layout(title=f"{ticker} Price + EMA + VWAP", xaxis_title="Time", yaxis_title="Price")
+        st.plotly_chart(price_fig)
 
-df = df.dropna()
+        # -----------------------------
+        # RSI CHART
+        # -----------------------------
+        rsi_fig = go.Figure()
+        rsi_fig.add_trace(go.Scatter(x=data.index, y=data["RSI"], name="RSI"))
+        rsi_fig.add_hline(y=70, line_dash="dot")
+        rsi_fig.add_hline(y=30, line_dash="dot")
+        rsi_fig.update_layout(title=f"{ticker} RSI", yaxis=dict(range=[0,100]))
+        st.plotly_chart(rsi_fig)
 
-# ---------------------------------------------------------
-# ATR Trigger Preview (Next Day)
-# ---------------------------------------------------------
+        # -----------------------------
+        # STOCHASTIC RSI
+        # -----------------------------
+        stoch_fig = go.Figure()
+        stoch_fig.add_trace(go.Scatter(x=data.index, y=data["Stoch_K"], name="Stoch %K", line=dict(color="blue")))
+        stoch_fig.add_trace(go.Scatter(x=data.index, y=data["Stoch_D"], name="Stoch %D", line=dict(color="orange")))
+        stoch_fig.add_hline(y=80, line_dash="dot")
+        stoch_fig.add_hline(y=20, line_dash="dot")
+        stoch_fig.update_layout(title=f"{ticker} Stochastic RSI", yaxis=dict(range=[0,100]))
+        st.plotly_chart(stoch_fig)
 
-st.subheader("Next-Day ATR Trigger Preview (Based on last close)")
-if not df.empty:
-    last_close = float(df["Close"].iloc[-1])
-    last_atr = float(df["ATR"].iloc[-1])
+        # -----------------------------
+        # MACD
+        # -----------------------------
+        macd_fig = go.Figure()
+        macd_fig.add_trace(go.Scatter(x=data.index, y=data["MACD"], name="MACD", line=dict(color="blue")))
+        macd_fig.add_trace(go.Scatter(x=data.index, y=data["MACD_signal"], name="Signal", line=dict(color="orange")))
+        macd_fig.add_bar(x=data.index, y=data["MACD_hist"], name="Histogram", marker_color="grey")
+        macd_fig.update_layout(title=f"{ticker} MACD")
+        st.plotly_chart(macd_fig)
 
-    buy_trigger = last_close - last_atr * atr_mult_buy
-    sell_trigger = last_close + last_atr * atr_mult_sell
+        # -----------------------------
+        # VOLUME CHART
+        # -----------------------------
+        vol_fig = go.Figure()
+        vol_fig.add_trace(go.Bar(x=data.index, y=data["Volume"], name="Volume"))
+        vol_fig.update_layout(title=f"{ticker} Volume")
+        st.plotly_chart(vol_fig)
 
-    col1, col2 = st.columns(2)
-    col1.metric("Previous Close", f"${last_close:,.2f}")
-    col2.metric(f"ATR({atr_period})", f"${last_atr:,.2f}")
+        # -----------------------------
+        # RAW DATA
+        # -----------------------------
+        st.write(data[["Close","EMA_12","EMA_26","VWAP","RSI","Stoch_K","Stoch_D","MACD","MACD_signal","MACD_hist","Volume"]][::-1])
 
-    preview_df = pd.DataFrame({
-        "Trigger Type": ["Buy Dip Trigger", "Sell Rip Trigger"],
-        "Target Price": [buy_trigger, sell_trigger],
-        "Price Change from Close": [buy_trigger - last_close, sell_trigger - last_close],
-    })
+        # -----------------------------
+        # REFRESH BUTTON
+        # -----------------------------
+        if refresh_button:
+            st.experimental_rerun()
 
-    st.dataframe(preview_df.style.format({
-        "Target Price": "${:,.2f}",
-        "Price Change from Close": "{:,.2f}",
-    }), use_container_width=True)
-
-st.markdown("---")
-
-# ---------------------------------------------------------
-# Simulate ATR Strategy
-# ---------------------------------------------------------
-
-cash = float(initial_cash)
-shares = 0.0
-trades = []
-portfolio_value_over_time = []
-num_trades = 0
-
-for idx, row in df.iterrows():
-    prev_close = float(row["PrevClose"])
-    day_low = float(row["Low"])
-    day_high = float(row["High"])
-    day_close = float(row["Close"])
-    atr = float(row["ATR"])
-    
-    # ATR triggers based on previous close
-    buy_trigger = prev_close - atr * atr_mult_buy
-    sell_trigger = prev_close + atr * atr_mult_sell
-
-    # Execution price is set to the conservative Day Close
-    execution_price = day_close 
-
-    # 1. BUY ATR (Dip)
-    if day_low <= buy_trigger and cash >= trade_amount:
-        # Calculate shares based on fixed trade_amount and conservative execution_price
-        qty = trade_amount / execution_price
-        cash -= trade_amount
-        shares += qty
-        total_value = cash + shares * execution_price
-        trades.append([idx, "BUY ATR (Dip)", execution_price, qty, cash, shares, total_value])
-        num_trades += 1
-
-    # 2. SELL ATR (Rip)
-    if day_high >= sell_trigger:
-        # Calculate shares to sell based on fixed trade_amount and conservative execution_price
-        qty = trade_amount / execution_price
-        if shares >= qty:
-            cash += trade_amount
-            shares -= qty
-            total_value = cash + shares * execution_price
-            trades.append([idx, "SELL ATR (Rip)", execution_price, qty, cash, shares, total_value])
-            num_trades += 1
-
-    # Record daily portfolio value at the closing price
-    portfolio_value_over_time.append([idx, cash + shares * day_close])
-
-# Final values
-final_close = float(df["Close"].iloc[-1])
-final_value = cash + shares * final_close
-
-# ---------------------------------------------------------
-# Buy-and-Hold Comparison & Performance Calculation
-# ---------------------------------------------------------
-
-initial_shares = float(initial_cash / df["Close"].iloc[0])
-buy_hold_value = df["Close"] * initial_shares
-
-# Create unified portfolio DataFrame
-portfolio_df = pd.DataFrame(portfolio_value_over_time, columns=["Date", "StrategyValue"])
-portfolio_df.set_index("Date", inplace=True)
-portfolio_df["BuyHoldValue"] = buy_hold_value.values
-
-# Calculate returns for Sharpe Ratio
-strategy_returns = portfolio_df["StrategyValue"].pct_change().dropna()
-buyhold_returns = portfolio_df["BuyHoldValue"].pct_change().dropna()
-
-# Time period in years
-years = (df.index[-1] - df.index[0]).days / 365.25
-if years < 0.1:
-    st.warning("The selected date range is very short. Annualized metrics may not be meaningful.")
-    years = 1.0 
-
-
-# Calculate metrics and fix TypeError by casting results to float
-strat_cagr = calculate_cagr(final_value, initial_cash, years)
-strat_mdd = float(calculate_mdd(portfolio_df["StrategyValue"])) # FIX APPLIED HERE
-strat_sharpe = calculate_sharpe_ratio(strategy_returns)
-
-bh_final_value = float(buy_hold_value.iloc[-1])
-bh_cagr = calculate_cagr(bh_final_value, initial_cash, years)
-bh_mdd = float(calculate_mdd(buy_hold_value)) # FIX APPLIED HERE
-bh_sharpe = calculate_sharpe_ratio(buyhold_returns)
-
-# ---------------------------------------------------------
-# Display Results
-# ---------------------------------------------------------
-
-st.subheader("Performance Summary 📊")
-
-performance_summary = pd.DataFrame({
-    "Metric": ["Final Value", "CAGR (Annualized)", "Max Drawdown", "Sharpe Ratio (Annualized)", "Total Trades"],
-    "ATR Strategy": [
-        f"${final_value:,.2f}", 
-        f"{strat_cagr:.2%}", 
-        f"{strat_mdd:.2%}", # Formatting now works
-        f"{strat_sharpe:,.2f}",
-        num_trades
-    ],
-    "Buy-and-Hold": [
-        f"${bh_final_value:,.2f}", 
-        f"{bh_cagr:.2%}", 
-        f"{bh_mdd:.2%}", # Formatting now works
-        f"{bh_sharpe:,.2f}",
-        "N/A"
-    ]
-})
-
-st.table(performance_summary.set_index("Metric"))
-
-st.markdown("---")
-
-# --- Charts ---
-col_charts = st.columns(2)
-
-with col_charts[0]:
-    st.subheader("Portfolio Value vs Buy-and-Hold")
-    st.line_chart(portfolio_df, use_container_width=True)
-
-with col_charts[1]:
-    st.subheader(f"{ticker} Closing Price")
-    st.line_chart(df["Close"], use_container_width=True)
-
-st.markdown("---")
-
-# Trade log
-trades_df = pd.DataFrame(
-    trades,
-    columns=["Date", "Type", "Execution Price", "Shares", "Cash After", "Shares After", "Total Value"]
-)
-
-st.subheader("Trade Log")
-st.dataframe(trades_df.style.format({
-    "Execution Price": "${:,.2f}",
-    "Shares": "{:,.4f}",
-    "Cash After": "${:,.2f}",
-    "Shares After": "{:,.4f}",
-    "Total Value": "${:,.2f}"
-}), use_container_width=True)
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
