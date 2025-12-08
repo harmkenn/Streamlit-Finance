@@ -69,12 +69,15 @@ df["MA200"] = df["Close"].rolling(200).mean()
 df["RSI"] = calculate_rsi(df["Close"])
 
 # Ensure moving average columns exist
-if "MA20" not in df.columns or "MA50" not in df.columns or "MA200" not in df.columns:
-    st.error("One or more moving average columns are missing. Ensure sufficient data for calculation.")
+required_columns = ["MA20", "MA50", "MA200", "RSI"]
+missing_columns = [col for col in required_columns if col not in df.columns]
+
+if missing_columns:
+    st.error(f"Missing columns in DataFrame: {missing_columns}. Ensure sufficient data for calculations.")
     st.stop()
 
 # Drop rows with NaN values in moving average columns
-df = df.dropna(subset=["MA20", "MA50", "MA200", "RSI"])
+df = df.dropna(subset=required_columns)
 
 # Align indices of Close and moving average columns
 df["Close"], df["MA20"] = df["Close"].align(df["MA20"], axis=0)
@@ -91,7 +94,6 @@ df["Bullish"] = (
 
 # -----------------------------------------
 # Next-day trigger preview
-# -----------------------------------------
 last_close = float(df["Close"].iloc[-1])
 ma_last = float(df[f"MA{ma_period}"].iloc[-1])
 ma20_last = float(df["MA20"].iloc[-1])
@@ -154,156 +156,3 @@ st.dataframe(preview_df.style.format({
     f"Adjusted for MA{ma_period}": "${:,.2f}",
     "Shares at Trigger Price": "{:,.4f}"
 }))
-
-# -----------------------------------------
-# Simulate Strategy with MA adjustment and bullish bias
-# -----------------------------------------
-cash = float(initial_cash)
-shares = 0.0
-trades = []
-portfolio_value_over_time = []
-
-for idx, row in df.iterrows():
-    prev_close = float(row["PrevClose"])
-    day_low = float(row["Low"])
-    day_high = float(row["High"])
-    day_close = float(row["Close"])
-    ma = float(row[f"MA{ma_period}"])
-    is_bullish_day = bool(row["Bullish"])
-
-    # Base triggers
-    buy_5 = prev_close * (1 - drop_pct_5)
-    sell_5 = prev_close * (1 + spike_pct_5)
-    buy_10 = prev_close * (1 - drop_pct_10)
-    sell_10 = prev_close * (1 + spike_pct_10)
-
-    # Apply bullish bias
-    if is_bullish_day:
-        buy_5 = prev_close * (1 - drop_pct_5 * bullish_buy_multiplier)
-        sell_5 = prev_close * (1 + spike_pct_5 * bullish_sell_multiplier)
-        buy_10 = prev_close * (1 - drop_pct_10 * bullish_buy_multiplier)
-        sell_10 = prev_close * (1 + spike_pct_10 * bullish_sell_multiplier)
-
-    # Adjusted for MA
-    buy_5_adj = min(buy_5, ma)
-    sell_5_adj = max(sell_5, ma)
-    buy_10_adj = min(buy_10, ma)
-    sell_10_adj = max(sell_10, ma)
-
-    trade_suffix = " (Bullish)" if is_bullish_day else ""
-
-    # BUY 5% (only if cash available)
-    if day_low <= buy_5_adj and cash >= trade_amount:
-        qty = trade_amount / buy_5_adj
-        cash -= trade_amount
-        shares += qty
-        total_value = cash + shares * buy_5_adj
-        trades.append([idx, f"BUY 5% (MA-adjusted){trade_suffix}", buy_5_adj, qty, cash, shares, total_value])
-
-    # SELL 5%
-    if day_high >= sell_5_adj:
-        qty = trade_amount / sell_5_adj
-        if shares >= qty:
-            cash += trade_amount
-            shares -= qty
-            total_value = cash + shares * sell_5_adj
-            trades.append([idx, f"SELL 5% (MA-adjusted){trade_suffix}", sell_5_adj, qty, cash, shares, total_value])
-
-    # BUY 10% (only if cash available)
-    if day_low <= buy_10_adj and cash >= trade_amount:
-        qty = trade_amount / buy_10_adj
-        cash -= trade_amount
-        shares += qty
-        total_value = cash + shares * buy_10_adj
-        trades.append([idx, f"BUY 10% (MA-adjusted){trade_suffix}", buy_10_adj, qty, cash, shares, total_value])
-
-    # SELL 10%
-    if day_high >= sell_10_adj:
-        qty = trade_amount / sell_10_adj
-        if shares >= qty:
-            cash += trade_amount
-            shares -= qty
-            total_value = cash + shares * sell_10_adj
-            trades.append([idx, f"SELL 10% (MA-adjusted){trade_suffix}", sell_10_adj, qty, cash, shares, total_value])
-
-    # Record daily portfolio value
-    portfolio_value_over_time.append([idx, cash + shares * day_close])
-
-# Final strategy value
-final_value = cash + shares * float(df["Close"].iloc[-1])
-
-# -----------------------------------------
-# Buy-and-hold comparison
-# -----------------------------------------
-initial_shares = float(initial_cash / df["Close"].iloc[0])
-buy_hold_value = df["Close"] * initial_shares
-
-# Align portfolio_df and buy_hold_value
-portfolio_df = pd.DataFrame(portfolio_value_over_time, columns=["Date", "StrategyValue"])
-portfolio_df.set_index("Date", inplace=True)
-portfolio_df["BuyHoldValue"] = buy_hold_value.reindex(portfolio_df.index).values
-
-# -----------------------------------------
-# Display Results
-# -----------------------------------------
-st.subheader("Final Results")
-strategy_return = (final_value - initial_cash) / initial_cash * 100
-buy_hold_return = (float(buy_hold_value.iloc[-1]) - initial_cash) / initial_cash * 100
-
-col1, col2 = st.columns(2)
-with col1:
-    st.metric("Strategy Final Value", f"${final_value:,.2f}", f"{strategy_return:+.1f}%")
-with col2:
-    st.metric("Buy-and-Hold Final Value", f"${float(buy_hold_value.iloc[-1]):,.2f}", f"{buy_hold_return:+.1f}%")
-
-# Trade statistics
-if trades:
-    trades_df = pd.DataFrame(
-        trades,
-        columns=["Date", "Type", "Execution Price", "Shares", "CashAfter", "SharesAfter", "TotalValue"]
-    )
-    
-    bullish_trades = trades_df[trades_df["Type"].str.contains("Bullish")]
-    normal_trades = trades_df[~trades_df["Type"].str.contains("Bullish")]
-    
-    st.subheader("Trade Statistics")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Trades", len(trades_df))
-    with col2:
-        st.metric("Bullish Trades", len(bullish_trades))
-    with col3:
-        st.metric("Normal Trades", len(normal_trades))
-
-    st.subheader("Trade Log")
-    st.dataframe(trades_df.style.format({
-        "Execution Price": "${:,.2f}",
-        "Shares": "{:,.4f}",
-        "CashAfter": "${:,.2f}",
-        "SharesAfter": "{:,.4f}",
-        "TotalValue": "${:,.2f}"
-    }))
-
-# Portfolio curves
-st.subheader("Portfolio Value vs Buy-and-Hold")
-st.line_chart(portfolio_df)
-
-# Technical indicators chart
-st.subheader("Technical Indicators")
-chart_df = df[["Close", "MA20", "MA50", "MA200", "RSI"]].copy()
-
-# Align RSI with Close before scaling
-chart_df["RSI_Scaled"] = chart_df["RSI"].align(chart_df["Close"], axis=0)[0] * (chart_df["Close"].iloc[-1] / 100)
-
-col1, col2 = st.columns(2)
-with col1:
-    st.subheader("Price & Moving Averages")
-    st.line_chart(chart_df[["Close", "MA20", "MA50", "MA200"]])
-with col2:
-    st.subheader("RSI")
-    st.line_chart(chart_df[["RSI"]])
-
-# Bullish periods
-bullish_periods = df["Bullish"].sum()
-total_periods = len(df)
-st.write(f"**Bullish periods:** {bullish_periods} out of {total_periods} days ({bullish_periods/total_periods*100:.1f}%)")
