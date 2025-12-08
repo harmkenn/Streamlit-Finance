@@ -68,6 +68,19 @@ df["MA50"] = df["Close"].rolling(50).mean()
 df["MA200"] = df["Close"].rolling(200).mean()
 df["RSI"] = calculate_rsi(df["Close"])
 
+# Ensure moving average columns exist
+if "MA20" not in df.columns or "MA50" not in df.columns or "MA200" not in df.columns:
+    st.error("One or more moving average columns are missing. Ensure sufficient data for calculation.")
+    st.stop()
+
+# Drop rows with NaN values in moving average columns
+df = df.dropna(subset=["MA20", "MA50", "MA200", "RSI"])
+
+# Align indices of Close and moving average columns
+df["Close"], df["MA20"] = df["Close"].align(df["MA20"], axis=0)
+df["Close"], df["MA50"] = df["Close"].align(df["MA50"], axis=0)
+df["Close"], df["MA200"] = df["Close"].align(df["MA200"], axis=0)
+
 # Bullish condition
 df["Bullish"] = (
     (df["Close"] > df["MA20"]) & 
@@ -75,8 +88,6 @@ df["Bullish"] = (
     (df["Close"] > df["MA200"]) & 
     (df["RSI"] > 50)
 )
-
-df = df.dropna()
 
 # -----------------------------------------
 # Next-day trigger preview
