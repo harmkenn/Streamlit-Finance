@@ -227,6 +227,11 @@ final_value = cash + shares * float(df["Close"].iloc[-1])
 initial_shares = float(initial_cash / df["Close"].iloc[0])
 buy_hold_value = df["Close"] * initial_shares
 
+# Align portfolio_df and buy_hold_value
+portfolio_df = pd.DataFrame(portfolio_value_over_time, columns=["Date", "StrategyValue"])
+portfolio_df.set_index("Date", inplace=True)
+portfolio_df["BuyHoldValue"] = buy_hold_value.reindex(portfolio_df.index).values
+
 # -----------------------------------------
 # Display Results
 # -----------------------------------------
@@ -269,17 +274,15 @@ if trades:
     }))
 
 # Portfolio curves
-portfolio_df = pd.DataFrame(portfolio_value_over_time, columns=["Date", "StrategyValue"])
-portfolio_df.set_index("Date", inplace=True)
-portfolio_df["BuyHoldValue"] = buy_hold_value.values
-
 st.subheader("Portfolio Value vs Buy-and-Hold")
 st.line_chart(portfolio_df)
 
 # Technical indicators chart
 st.subheader("Technical Indicators")
 chart_df = df[["Close", "MA20", "MA50", "MA200", "RSI"]].copy()
-chart_df["RSI_Scaled"] = chart_df["RSI"] * (chart_df["Close"].iloc[-1] / 100)  # Scale RSI for visibility
+
+# Align RSI with Close before scaling
+chart_df["RSI_Scaled"] = chart_df["RSI"].align(chart_df["Close"], axis=0)[0] * (chart_df["Close"].iloc[-1] / 100)
 
 col1, col2 = st.columns(2)
 with col1:
