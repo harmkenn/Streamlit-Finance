@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 
-st.title("TQQQ Trend + ATR Trailing Stop vs Buy-and-Hold v2.3")
+st.title("TQQQ Trend + ATR Trailing Stop vs Buy-and-Hold v2.4")
 
 # --- Sidebar Controls ---
 st.sidebar.header("Parameters")
