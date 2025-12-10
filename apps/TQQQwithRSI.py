@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 
-st.title("TQQQ Trend + ATR Trailing Stop vs Buy-and-Hold v2.1")
+st.title("TQQQ Trend + ATR Trailing Stop vs Buy-and-Hold v2.2")
 
 # --- Sidebar Controls ---
 st.sidebar.header("Parameters")
@@ -19,7 +19,9 @@ initial_cash = 100000
 st.header("Data and Indicators")
 
 try:
-    df = yf.download(ticker="TQQQ", period=period, interval="1d")
+    # Corrected yf.download call with 'tickers' argument
+    df = yf.download(tickers="TQQQ", period=period, interval="1d")
+    
     if df.empty:
         st.error("No data downloaded for the selected period. Please try again.")
         st.stop()
