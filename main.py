@@ -17,7 +17,8 @@ sub_app_names = {
     'OptionWeek.py': 'Option Week',
     'Predict.py': 'Predict',
     'TQQQpriceLHC.py': 'TQQQ',
-    'UPRO.py': 'UPRO'
+    'UPRO.py': 'UPRO',
+    'UDOW.py': 'UDOW'
 }
 
 # Get a list of .py files from the SubApps folder

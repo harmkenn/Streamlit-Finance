@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.title("UPRO Trigger Strategy (MA-Adjusted) vs Buy-and-Hold")
+st.title("UDOW Trigger Strategy (MA-Adjusted) vs Buy-and-Hold")
 
 # -----------------------------------------
 # Strategy parameters with sliders
@@ -12,8 +12,8 @@ trade_amount = 10000
 
 st.sidebar.header("Strategy Parameters")
 
-drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 5) / 100
-spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 8) / 100
+drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 4) / 100
+spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 7) / 100
 drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 8) / 100
 spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 14) / 100
 
@@ -30,9 +30,9 @@ Simulating a strategy where:
 """)
 
 # -----------------------------------------
-# Load 3 years of UPRO daily data
+# Load 3 years of UDOW daily data
 # -----------------------------------------
-ticker = "UPRO"
+ticker = "UDOW"
 df = yf.download(ticker, period="3y", interval="1d")
 
 if df.empty:
@@ -185,5 +185,5 @@ portfolio_df["BuyHoldValue"] = buy_hold_value.values
 st.subheader("Portfolio Value vs Buy-and-Hold")
 st.line_chart(portfolio_df)
 
-st.subheader("UPRO Closing Price")
+st.subheader("UDOW Closing Price")
 st.line_chart(df["Close"])
