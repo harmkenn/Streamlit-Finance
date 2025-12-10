@@ -45,10 +45,14 @@ df = df.astype(float)
 df[f"MA{short_ma_period}"] = df["Close"].rolling(short_ma_period).mean()
 df[f"MA{long_ma_period}"] = df["Close"].rolling(long_ma_period).mean()
 
-# ATR (Average True Range)
-df["TR"] = df[["High", "Low", "Close"]].apply(
-    lambda row: max(row["High"] - row["Low"], abs(row["High"] - row["Close"]), abs(row["Low"] - row["Close"])),
-    axis=1
+# True Range (TR) and Average True Range (ATR)
+df["TR"] = df.apply(
+    lambda row: max(
+        row["High"] - row["Low"], 
+        abs(row["High"] - row["Close"]), 
+        abs(row["Low"] - row["Close"])
+    ),
+    axis=1  # Apply row-by-row
 )
 df["ATR"] = df["TR"].rolling(atr_period).mean()
 
