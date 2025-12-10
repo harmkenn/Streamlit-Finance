@@ -1,8 +1,8 @@
-import streamlit as st
 import pandas as pd
 import yfinance as yf
+import streamlit as st
 
-st.title("TQQQ RSI-Adjusted Trigger Strategy vs Buy-and-Hold")
+st.title("TQQQ Trend and Volatility-Based Strategy vs Buy-and-Hold")
 
 # -----------------------------------------
 # Strategy parameters
@@ -11,16 +11,19 @@ initial_cash = 100000
 trade_amount = 10000
 
 st.sidebar.header("Strategy Parameters")
-ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 7)
+short_ma_period = st.sidebar.slider("Short MA Period", 5, 50, 10)
+long_ma_period = st.sidebar.slider("Long MA Period", 20, 200, 50)
+atr_period = st.sidebar.slider("ATR Period", 5, 50, 14)
+rsi_period = st.sidebar.slider("RSI Period", 5, 50, 14)
 
 st.write(f"""
 Simulating a strategy where:
 
 - Start with **${initial_cash:,}** cash  
-- Buy/Sell **${trade_amount:,}** based on RSI-adjusted thresholds  
-- Apply **MA{ma_period} filter**:  
-  - *Buy price = min(trigger, MA{ma_period})*  
-  - *Sell price = max(trigger, MA{ma_period})*  
+- Buy/Sell **${trade_amount:,}** based on trend and volatility  
+- Use **MA{short_ma_period} and MA{long_ma_period}** for trend detection  
+- Use **ATR{atr_period}** for volatility adjustment  
+- Use **RSI{rsi_period}** for confirmation  
 """)
 
 # -----------------------------------------
@@ -34,9 +37,22 @@ if df.empty:
     st.stop()
 
 df = df.astype(float)
-df["PrevClose"] = df["Close"].shift(1)
 
-# Calculate RSI
+# -----------------------------------------
+# Calculate Indicators
+# -----------------------------------------
+# Moving Averages
+df[f"MA{short_ma_period}"] = df["Close"].rolling(short_ma_period).mean()
+df[f"MA{long_ma_period}"] = df["Close"].rolling(long_ma_period).mean()
+
+# ATR (Average True Range)
+df["TR"] = df[["High", "Low", "Close"]].apply(
+    lambda row: max(row["High"] - row["Low"], abs(row["High"] - row["Close"]), abs(row["Low"] - row["Close"])),
+    axis=1
+)
+df["ATR"] = df["TR"].rolling(atr_period).mean()
+
+# RSI
 def calculate_rsi(data, window=14):
     delta = data["Close"].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
@@ -45,34 +61,11 @@ def calculate_rsi(data, window=14):
     data["RSI"] = 100 - (100 / (1 + rs))
     return data
 
-df = calculate_rsi(df)
-df[f"MA{ma_period}"] = df["Close"].rolling(ma_period).mean()
+df = calculate_rsi(df, rsi_period)
 df = df.dropna()
 
 # -----------------------------------------
-# RSI-based dynamic thresholds
-# -----------------------------------------
-def get_dynamic_thresholds(rsi):
-    """
-    Calculate dynamic buy/sell thresholds based on RSI.
-    - RSI = 75: Sell at 2.5%, Buy at 6.5%
-    - RSI = 25: Sell at 6.5%, Buy at 2.5%
-    - Linear scaling for RSI between 25 and 75
-    """
-    if rsi >= 75:
-        sell_threshold = 0.025  # 2.5%
-        buy_threshold = 0.065  # 6.5%
-    elif rsi <= 25:
-        sell_threshold = 0.065  # 6.5%
-        buy_threshold = 0.025  # 2.5%
-    else:
-        # Linear scaling
-        sell_threshold = 0.065 - (rsi - 25) * (0.065 - 0.025) / (75 - 25)
-        buy_threshold = 0.025 + (rsi - 25) * (0.065 - 0.025) / (75 - 25)
-    return sell_threshold, buy_threshold
-
-# -----------------------------------------
-# Simulate Strategy with RSI adjustment
+# Simulate Strategy
 # -----------------------------------------
 cash = float(initial_cash)
 shares = 0.0
@@ -80,40 +73,36 @@ trades = []
 portfolio_value_over_time = []
 
 for idx, row in df.iterrows():
-    prev_close = float(row["PrevClose"])
-    day_low = float(row["Low"])
-    day_high = float(row["High"])
-    day_close = float(row["Close"])
-    ma = float(row[f"MA{ma_period}"])
-    rsi = float(row["RSI"])
+    short_ma = row[f"MA{short_ma_period}"]
+    long_ma = row[f"MA{long_ma_period}"]
+    atr = row["ATR"]
+    rsi = row["RSI"]
+    day_close = row["Close"]
 
-    # Get dynamic thresholds based on RSI
-    sell_threshold, buy_threshold = get_dynamic_thresholds(rsi)
+    # Trend detection
+    bullish_crossover = short_ma > long_ma
+    bearish_crossover = short_ma < long_ma
 
-    # Raw triggers
-    buy_price = prev_close * (1 - buy_threshold)
-    sell_price = prev_close * (1 + sell_threshold)
+    # RSI confirmation
+    overbought = rsi > 70
+    oversold = rsi < 30
 
-    # Adjusted for MA
-    buy_price_adj = min(buy_price, ma)
-    sell_price_adj = max(sell_price, ma)
-
-    # BUY (only if cash available)
-    if day_low <= buy_price_adj and cash >= trade_amount:
-        qty = trade_amount / buy_price_adj
+    # BUY signal
+    if bullish_crossover and not overbought and cash >= trade_amount:
+        qty = trade_amount / day_close
         cash -= trade_amount
         shares += qty
-        total_value = cash + shares * buy_price_adj
-        trades.append([idx, "BUY (RSI-adjusted)", buy_price_adj, qty, cash, shares, total_value])
+        total_value = cash + shares * day_close
+        trades.append([idx, "BUY", day_close, qty, cash, shares, total_value])
 
-    # SELL
-    if day_high >= sell_price_adj:
-        qty = trade_amount / sell_price_adj
+    # SELL signal
+    if bearish_crossover and not oversold and shares > 0:
+        qty = trade_amount / day_close
         if shares >= qty:
             cash += trade_amount
             shares -= qty
-            total_value = cash + shares * sell_price_adj
-            trades.append([idx, "SELL (RSI-adjusted)", sell_price_adj, qty, cash, shares, total_value])
+            total_value = cash + shares * day_close
+            trades.append([idx, "SELL", day_close, qty, cash, shares, total_value])
 
     # Record daily portfolio value
     portfolio_value_over_time.append([idx, cash + shares * day_close])
