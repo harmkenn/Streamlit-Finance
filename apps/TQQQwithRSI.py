@@ -1,147 +1,108 @@
+import streamlit as st
 import pandas as pd
 import yfinance as yf
-import streamlit as st
+import numpy as np
 
-st.title("TQQQ Trend and Volatility-Based Strategy vs Buy-and-Hold v1.0")
+st.title("TQQQ Trend + ATR Trailing Stop vs Buy-and-Hold v2.0")
 
-# -----------------------------------------
-# Strategy parameters
-# -----------------------------------------
-initial_cash = 100000
-trade_amount = 10000
-
-st.sidebar.header("Strategy Parameters")
-short_ma_period = st.sidebar.slider("Short MA Period", 5, 50, 10)
-long_ma_period = st.sidebar.slider("Long MA Period", 20, 200, 50)
-atr_period = st.sidebar.slider("ATR Period", 5, 50, 14)
-rsi_period = st.sidebar.slider("RSI Period", 5, 50, 14)
-
-st.write(f"""
-Simulating a strategy where:
-
-- Start with **${initial_cash:,}** cash  
-- Buy/Sell **${trade_amount:,}** based on trend and volatility  
-- Use **MA{short_ma_period} and MA{long_ma_period}** for trend detection  
-- Use **ATR{atr_period}** for volatility adjustment  
-- Use **RSI{rsi_period}** for confirmation  
-""")
-
-# -----------------------------------------
-# Load 5 years of TQQQ daily data
-# -----------------------------------------
 ticker = "TQQQ"
-df = yf.download(ticker, period="5y", interval="1d")
+period = st.sidebar.selectbox("Backtest period", ["3y", "5y", "10y"], index=1)
+ma_len = st.sidebar.slider("Trend MA length", 20, 200, 100)
+atr_len = st.sidebar.slider("ATR length", 5, 30, 14)
+atr_mult_entry = st.sidebar.slider("Min trend strength (ATR/Close max)", 0.01, 0.10, 0.05, 0.005)
+atr_mult_stop = st.sidebar.slider("Trailing stop (x ATR)", 1.0, 5.0, 2.0, 0.5)
+risk_pct = st.sidebar.slider("Risk per trade (%)", 0.5, 5.0, 1.0, 0.5)
+initial_cash = 100000
 
-if df.empty:
-    st.error("Error: No data returned.")
-    st.stop()
-
-df = df.astype(float)
-
-# -----------------------------------------
-# Calculate Indicators
-# -----------------------------------------
-# Moving Averages
-df[f"MA{short_ma_period}"] = df["Close"].rolling(short_ma_period).mean()
-df[f"MA{long_ma_period}"] = df["Close"].rolling(long_ma_period).mean()
-
-# True Range (TR) and Average True Range (ATR)
-df["TR"] = df[["High", "Low", "Close"]].apply(
-    lambda row: max(
-        row["High"] - row["Low"], 
-        abs(row["High"] - row["Close"]), 
-        abs(row["Low"] - row["Close"])
-    ),
-    axis=1  # Apply row-by-row
-)
-df["ATR"] = df["TR"].rolling(atr_period).mean()
-
-# RSI
-def calculate_rsi(data, window=14):
-    delta = data["Close"].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    rs = gain / loss
-    data["RSI"] = 100 - (100 / (1 + rs))
-    return data
-
-df = calculate_rsi(df, rsi_period)
+# Data
+df = yf.download(ticker, period=period, interval="1d").dropna()
+df["TR"] = np.maximum(df["High"] - df["Low"],
+                      np.maximum(abs(df["High"] - df["Close"].shift(1)),
+                                 abs(df["Low"] - df["Close"].shift(1))))
+df["ATR"] = df["TR"].rolling(atr_len).mean()
+df[f"MA{ma_len}"] = df["Close"].rolling(ma_len).mean()
+df["TrendUp"] = (df["Close"] > df[f"MA{ma_len}"]) & (df[f"MA{ma_len}"].diff() > 0)
+df["VolOK"] = (df["ATR"] / df["Close"]) < atr_mult_entry
 df = df.dropna()
 
-# -----------------------------------------
-# Simulate Strategy
-# -----------------------------------------
-cash = float(initial_cash)
+# Backtest
+cash = initial_cash
 shares = 0.0
+peak_price_for_stop = None
+portfolio = []
 trades = []
-portfolio_value_over_time = []
 
-for idx, row in df.iterrows():
-    short_ma = row[f"MA{short_ma_period}"]
-    long_ma = row[f"MA{long_ma_period}"]
-    atr = row["ATR"]
-    rsi = row["RSI"]
-    day_close = row["Close"]
+for i in range(len(df)):
+    row = df.iloc[i]
+    price = float(row["Close"])
+    atr = float(row["ATR"])
+    trend_ok = bool(row["TrendUp"] and row["VolOK"])
 
-    # Trend detection
-    bullish_crossover = short_ma > long_ma
-    bearish_crossover = short_ma < long_ma
+    # Update trailing stop when in position
+    if shares > 0:
+        peak_price_for_stop = max(peak_price_for_stop or price, price)
+        stop_price = peak_price_for_stop - atr_mult_stop * atr
+    else:
+        stop_price = None
+        peak_price_for_stop = None
 
-    # RSI confirmation
-    overbought = rsi > 70
-    oversold = rsi < 30
+    # Entry
+    if shares == 0 and trend_ok:
+        # position size by risk: risk_pct * equity with stop at (entry - x*ATR)
+        stop_dist = atr_mult_stop * atr
+        if stop_dist > 0:
+            dollar_risk = cash * (risk_pct / 100.0)
+            qty = min(cash / price, dollar_risk / stop_dist)
+            # ensure some minimum size
+            qty = max(0.0, qty)
+        else:
+            qty = 0.0
 
-    # BUY signal
-    if bullish_crossover and not overbought and cash >= trade_amount:
-        qty = trade_amount / day_close
-        cash -= trade_amount
-        shares += qty
-        total_value = cash + shares * day_close
-        trades.append([idx, "BUY", day_close, qty, cash, shares, total_value])
+        cost = qty * price
+        if cost > 0 and cost <= cash:
+            shares += qty
+            cash -= cost
+            trades.append([df.index[i], "BUY", price, qty, cash, shares])
 
-    # SELL signal
-    if bearish_crossover and not oversold and shares > 0:
-        qty = trade_amount / day_close
-        if shares >= qty:
-            cash += trade_amount
-            shares -= qty
-            total_value = cash + shares * day_close
-            trades.append([idx, "SELL", day_close, qty, cash, shares, total_value])
+            # initialize stop anchor
+            peak_price_for_stop = price
+            stop_price = price - atr_mult_stop * atr
 
-    # Record daily portfolio value
-    portfolio_value_over_time.append([idx, cash + shares * day_close])
+    # Exit on stop or trend break
+    exit_signal = False
+    if shares > 0:
+        if stop_price and price <= stop_price:
+            exit_signal = True
+        elif not trend_ok:  # trend broken
+            exit_signal = True
 
-# Final strategy value
-final_value = cash + shares * float(df["Close"].iloc[-1])
+    if exit_signal and shares > 0:
+        proceeds = shares * price
+        cash += proceeds
+        trades.append([df.index[i], "SELL", price, shares, cash, 0.0])
+        shares = 0.0
+        peak_price_for_stop = None
+        stop_price = None
 
-# -----------------------------------------
-# Buy-and-hold comparison
-# -----------------------------------------
-initial_shares = float(initial_cash / df["Close"].iloc[0])
-buy_hold_value = df["Close"] * initial_shares
+    portfolio.append([df.index[i], cash + shares * price])
 
-# -----------------------------------------
-# Display Results
-# -----------------------------------------
+# Results
+port_df = pd.DataFrame(portfolio, columns=["Date", "StrategyValue"]).set_index("Date")
+initial_shares = initial_cash / df["Close"].iloc[0]
+buy_hold_series = df["Close"] * initial_shares
+port_df["BuyHoldValue"] = buy_hold_series.reindex(port_df.index)
+
 st.subheader("Final Results")
-st.write(f"**Strategy Final Value:** ${final_value:,.2f}")
-st.write(f"**Buy-and-Hold Final Value:** ${float(buy_hold_value.iloc[-1]):,.2f}")
+st.write(f"Strategy Final Value: ${port_df['StrategyValue'].iloc[-1]:,.2f}")
+st.write(f"Buy-and-Hold Final Value: ${port_df['BuyHoldValue'].iloc[-1]:,.2f}")
 
-# Trade log
-trades_df = pd.DataFrame(
-    trades,
-    columns=["Date", "Type", "Execution Price", "Shares", "CashAfter", "SharesAfter", "TotalValue"]
-)
-st.subheader("Trade Log")
-st.dataframe(trades_df)
-
-# Portfolio curves
-portfolio_df = pd.DataFrame(portfolio_value_over_time, columns=["Date", "StrategyValue"])
-portfolio_df.set_index("Date", inplace=True)
-portfolio_df["BuyHoldValue"] = buy_hold_value.values
+trade_df = pd.DataFrame(trades, columns=["Date", "Type", "Price", "Shares", "CashAfter", "SharesAfter"])
+st.subheader("Trades")
+st.dataframe(trade_df)
 
 st.subheader("Portfolio Value vs Buy-and-Hold")
-st.line_chart(portfolio_df)
+st.line_chart(port_df)
 
-st.subheader("TQQQ Closing Price")
-st.line_chart(df["Close"])
+st.subheader("TQQQ Close, MA, and ATR")
+viz = df[[f"MA{ma_len}", "Close", "ATR"]].copy()
+st.line_chart(viz)
