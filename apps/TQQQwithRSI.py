@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 
-st.title("Enhanced TQQQ Multi-Signal Strategy vs Buy-and-Hold v2.6")
+st.title("Enhanced TQQQ Multi-Signal Strategy vs Buy-and-Hold v2.7")
 
 # -----------------------------------------
 # Strategy parameters with sliders
@@ -68,7 +68,7 @@ df["RSI"] = calculate_rsi(df["Close"], rsi_period)
 
 # Volume indicators
 df[f"Volume_MA{volume_ma_period}"] = df["Volume"].rolling(volume_ma_period).mean()
-df["Volume_Ratio"] = df["Volume"] / df[f"Volume_MA{volume_ma_period}"]
+df["Volume_Ratio"] = df["Volume"] / df[f"Volume_MA{volume_ma_period}"]  # Correct calculation
 
 # Volatility indicator (ATR-like)
 df["High_Low"] = df["High"] - df["Low"]
