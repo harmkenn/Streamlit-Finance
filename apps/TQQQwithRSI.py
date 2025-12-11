@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.3")
+st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.4")
 
 # -----------------------------
 # Sidebar controls
@@ -68,10 +68,10 @@ df = df.dropna()
 def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
                       rsi_buy_max=60, rsi_sell_min=40,
                       initial_cash=100000, trade_amount=10000):
+
     cash = float(initial_cash)
     shares = 0.0
 
-    # convert percentage figures to decimals
     b = buy_drop / 100.0
     s = sell_rise / 100.0
 
@@ -79,19 +79,17 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
         prev_close = float(row["PrevClose"])
         low = float(row["Low"])
         high = float(row["High"])
-        close = float(row["Close"])
-        prev_close = float(row["PrevClose"])
+        rsi = float(row["RSI"])
 
-        # Skip if we don't have a valid previous close
         if np.isnan(prev_close):
             continue
 
         buy_trigger = prev_close * (1 - b)
         sell_trigger = prev_close * (1 + s)
 
-        # BUY condition
+        # BUY
         buy_cond = low <= buy_trigger
-        if use_:
+        if use_rsi:
             buy_cond = buy_cond and (rsi <= rsi_buy_max)
 
         if buy_cond and cash >= trade_amount:
@@ -99,29 +97,22 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
             cash -= trade_amount
             shares += qty
 
-        # SELL condition
+        # SELL
         sell_cond = high >= sell_trigger
-        if use_:
-            sell_cond = sell_cond and (rsi >= _sell_min)
+        if use_rsi:
+            sell_cond = sell_cond and (rsi >= rsi_sell_min)
 
         if sell_cond and shares > 0:
-            # sell up to trade_amount if possible
-            sell_value = trade_amount
-            max_sell_value = shares * sell_trigger
-            if sell_value > max_sell_value:
-                sell_value = max_sell_value
-
+            sell_value = min(trade_amount, shares * sell_trigger)
             qty = sell_value / sell_trigger
             shares -= qty
             cash += sell_value
 
-    # Final portfolio value at last close
     final_price = float(data["Close"].iloc[-1])
-    final_value = cash + shares * final_price
-    return final_value
+    return cash + shares * final_price
 
 # -----------------------------
-# Grid search over thresholds
+# Grid search
 # -----------------------------
 buy_drops = np.arange(buy_drop_min, buy_drop_max + 1e-9, buy_drop_step)
 sell_rises = np.arange(sell_rise_min, sell_rise_max + 1e-9, sell_rise_step)
@@ -143,13 +134,15 @@ for b in buy_drops:
             df,
             buy_drop=b,
             sell_rise=s,
-            use_=use__filter,
-            _buy_max=_buy_max,
-            _sell_min=_sell_min,
+            use_rsi=use_rsi_filter,
+            rsi_buy_max=rsi_buy_max,
+            rsi_sell_min=rsi_sell_min,
             initial_cash=initial_cash,
             trade_amount=trade_amount
         )
+
         results.append((b, s, final_val))
+
         if final_val > best_value:
             best_value = final_val
             best_params = (b, s)
@@ -159,45 +152,36 @@ progress.empty()
 results_df = pd.DataFrame(results, columns=["BuyDropPct", "SellRisePct", "FinalValue"])
 results_df = results_df.sort_values("FinalValue", ascending=False)
 
+# -----------------------------
+# Results
+# -----------------------------
 st.subheader("Best Historical Trigger Pair (5-Year Backtest)")
-if best_params is None:
-    st.write("No valid results from backtest.")
-    st.stop()
 
 best_buy, best_sell = best_params
-st.write(f"**Best Buy Drop:** {best_buy:.2f}% below previous close")
-st.write(f"**Best Sell Rise:** {best_sell:.2f}% above previous close")
+st.write(f"**Best Buy Drop:** {best_buy:.2f}%")
+st.write(f"**Best Sell Rise:** {best_sell:.2f}%")
 st.write(f"**Best Final Portfolio Value:** ${best_value:,.2f}")
 
 st.subheader("Top 15 Trigger Combinations")
 st.dataframe(results_df.head(15))
 
 # -----------------------------
-# Suggest today's target prices
+# Today's target prices
 # -----------------------------
 latest_row = df.iloc[-1]
 latest_close = float(latest_row["Close"])
-latest_ = float(latest_row[""])
+latest_rsi = float(latest_row["RSI"])
 
 today_buy_price = latest_close * (1 - best_buy / 100.0)
 today_sell_price = latest_close * (1 + best_sell / 100.0)
 
-st.subheader("Today's Suggested Targets (Based on Best Historical Triggers)")
+st.subheader("Today's Suggested Targets")
 
 st.write(f"**Latest Close:** ${latest_close:,.2f}")
-st.write(f"**Latest (14):** {latest_rsi:.1f}")
+st.write(f"**Latest RSI (14):** {latest_rsi:.1f}")
+st.write(f"**Suggested Buy Trigger:** ${today_buy_price:,.2f}")
+st.write(f"**Suggested Sell Trigger:** ${today_sell_price:,.2f}")
 
-st.write(f"**Suggested Buy Trigger:** "
-         f"${today_buy_price:,.2f} ({best_buy:.2f}% below last close)")
-st.write(f"**Suggested Sell Trigger:** "
-         f"${today_sell_price:,.2f} ({best_sell:.2f}% above last close)")
-
-st.info(
-    "These levels are derived purely from 5-year historical backtest of simple triggers "
-    "and are NOT financial advice."
-)
-
-# Optional: visualize price + RSI
 st.subheader("TQQQ Close and RSI (Last 5 Years)")
 viz = df[["Close", "RSI"]].copy()
 st.line_chart(viz)
