@@ -1,323 +1,203 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
 import numpy as np
+import yfinance as yf
 
-st.title("Enhanced TQQQ Multi-Signal Strategy vs Buy-and-Hold v2.7")
+st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI)" v3.0)
 
-# -----------------------------------------
-# Strategy parameters with sliders
-# -----------------------------------------
-initial_cash = 100000
-trade_amount = 10000
+# -----------------------------
+# Sidebar controls
+# -----------------------------
+st.sidebar.header("Backtest Settings")
 
-st.sidebar.header("Strategy Parameters")
+initial_cash = st.sidebar.number_input("Initial Cash", 10000, 500000, 100000, 10000)
+years = st.sidebar.slider("Lookback (years)", 1, 10, 5)
 
-# Original trigger parameters
-drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 4) / 100
-spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 7) / 100
-drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 8) / 100
-spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 14) / 100
+# Grid of thresholds (as percentage moves from previous close)
+buy_drop_min = st.sidebar.slider("Min buy drop (%)", 1.0, 20.0, 3.0, 0.5)
+buy_drop_max = st.sidebar.slider("Max buy drop (%)", 2.0, 30.0, 8.0, 0.5)
+buy_drop_step = st.sidebar.slider("Buy drop step (%)", 0.25, 5.0, 1.0, 0.25)
 
-# Enhanced parameters
-ma_period = st.sidebar.slider("Moving Average Period", 5, 50, 7)
-rsi_period = st.sidebar.slider("RSI Period", 5, 30, 14)
-volume_ma_period = st.sidebar.slider("Volume MA Period", 5, 30, 10)
-volatility_period = st.sidebar.slider("Volatility Period", 5, 30, 10)
+sell_rise_min = st.sidebar.slider("Min sell rise (%)", 1.0, 20.0, 3.0, 0.5)
+sell_rise_max = st.sidebar.slider("Max sell rise (%)", 2.0, 30.0, 8.0, 0.5)
+sell_rise_step = st.sidebar.slider("Sell rise step (%)", 0.25, 5.0, 1.0, 0.25)
 
-# Risk management
-max_position_pct = st.sidebar.slider("Max Position % of Portfolio", 10, 100, 80) / 100
-enable_volume_filter = st.sidebar.checkbox("Enable Volume Filter", value=True)
-enable_volatility_filter = st.sidebar.checkbox("Enable Volatility Filter", value=True)
-enable_rsi_filter = st.sidebar.checkbox("Enable RSI Filter", value=True)
+use_rsi_filter = st.sidebar.checkbox("Use RSI filters", value=True)
+rsi_buy_max = st.sidebar.slider("Max RSI for buys", 10, 90, 60)
+rsi_sell_min = st.sidebar.slider("Min RSI for sells", 10, 90, 40)
 
-st.write(f"""
-Enhanced strategy features:
+trade_amount = st.sidebar.number_input("Trade size per signal ($)", 1000, 50000, 10000, 1000)
 
-- Start with **${initial_cash:,}** cash  
-- Buy/Sell **${trade_amount:,}** on **{int(drop_pct_5*100)}% or {int(drop_pct_10*100)}% intraday moves**  
-- Apply **MA{ma_period} filter** + **RSI{rsi_period}** + **Volume** + **Volatility** filters
-- Maximum position: **{int(max_position_pct*100)}%** of portfolio
-""")
+st.write(
+    f"Backtesting on **TQQQ** with {years} years of daily data to "
+    f"find the best buy/sell triggers, then applying them to today's price."
+)
 
-# -----------------------------------------
-# Load 5 years of TQQQ daily data for better backtesting
-# -----------------------------------------
+# -----------------------------
+# Data loading
+# -----------------------------
 ticker = "TQQQ"
-df = yf.download(ticker, period="5y", interval="1d", auto_adjust=False)
+df = yf.download(ticker, period=f"{years}y", interval="1d")
 
 if df.empty:
-    st.error("Error: No data returned.")
+    st.error("No data returned for TQQQ.")
     st.stop()
 
-df = df.astype(float)
+# Flatten MultiIndex if present
+if isinstance(df.columns, pd.MultiIndex):
+    df.columns = [c[0] for c in df.columns]
+
+df = df[["Open", "High", "Low", "Close"]].astype(float)
 df["PrevClose"] = df["Close"].shift(1)
 
-# Calculate indicators
-df[f"MA{ma_period}"] = df["Close"].rolling(ma_period).mean()
-
 # RSI calculation
-def calculate_rsi(data, window=14):
-    delta = data.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
     rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-df["RSI"] = calculate_rsi(df["Close"], rsi_period)
-
-# Volume indicators
-df[f"Volume_MA{volume_ma_period}"] = df["Volume"].rolling(volume_ma_period).mean()
-df["Volume_Ratio"] = df["Volume"] / df[f"Volume_MA{volume_ma_period}"]  # Correct calculation
-
-# Volatility indicator (ATR-like)
-df["High_Low"] = df["High"] - df["Low"]
-df["High_PrevClose"] = abs(df["High"] - df["PrevClose"])
-df["Low_PrevClose"] = abs(df["Low"] - df["PrevClose"])
-df["True_Range"] = df[["High_Low", "High_PrevClose", "Low_PrevClose"]].max(axis=1)
-df["ATR"] = df["True_Range"].rolling(volatility_period).mean()
-df["Volatility_Ratio"] = df["ATR"] / df["Close"]
-
-# Market regime detection
-df["MA_Slope"] = df[f"MA{ma_period}"].diff(5)  # 5-day slope
-df["Trend_Strength"] = df["MA_Slope"] / df["Close"]
-
+df["RSI"] = compute_rsi(df["Close"])
 df = df.dropna()
 
-# -----------------------------------------
-# Enhanced signal generation
-# -----------------------------------------
-def get_signal_strength(row, drop_pct_5, spike_pct_5, drop_pct_10, spike_pct_10, 
-                       enable_rsi_filter, enable_volume_filter, enable_volatility_filter):
-    """Calculate signal strength based on multiple factors"""
-    
-    prev_close = row["PrevClose"]
-    day_low = row["Low"]
-    day_high = row["High"]
-    ma = row[f"MA{ma_period}"]
-    rsi = row["RSI"]
-    volume_ratio = row["Volume_Ratio"]
-    volatility_ratio = row["Volatility_Ratio"]
-    trend_strength = row["Trend_Strength"]
-    
-    # Base triggers
-    buy_5 = prev_close * (1 - drop_pct_5)
-    sell_5 = prev_close * (1 + spike_pct_5)
-    buy_10 = prev_close * (1 - drop_pct_10)
-    sell_10 = prev_close * (1 + spike_pct_10)
-    
-    # MA adjusted triggers
-    buy_5_adj = min(buy_5, ma)
-    sell_5_adj = max(sell_5, ma)
-    buy_10_adj = min(buy_10, ma)
-    sell_10_adj = max(sell_10, ma)
-    
-    signals = []
-    
-    # Check for buy signals
-    if day_low <= buy_5_adj:
-        signal_strength = 1.0
-        
-        # RSI filter: prefer buying when RSI is oversold but not extremely oversold
-        if enable_rsi_filter:
-            if 25 <= rsi <= 45:
-                signal_strength *= 1.2  # Boost signal
-            elif rsi < 20:
-                signal_strength *= 0.5  # Reduce signal (too oversold)
-            elif rsi > 60:
-                signal_strength *= 0.3  # Reduce signal (not oversold enough)
-        
-        # Volume filter: prefer high volume moves
-        if enable_volume_filter and volume_ratio > 1.2:
-            signal_strength *= 1.1
-        
-        # Volatility filter: avoid extremely volatile periods
-        if enable_volatility_filter and volatility_ratio > 0.05:
-            signal_strength *= 0.7
-        
-        # Trend filter: prefer buying in uptrends
-        if trend_strength > 0:
-            signal_strength *= 1.1
-        
-        signals.append(("BUY_5", buy_5_adj, signal_strength))
-    
-    if day_low <= buy_10_adj:
-        signal_strength = 1.5  # Stronger signal for larger drops
-        
-        if enable_rsi_filter:
-            if 20 <= rsi <= 40:
-                signal_strength *= 1.3
-            elif rsi < 15:
-                signal_strength *= 0.6
-            elif rsi > 55:
-                signal_strength *= 0.4
-        
-        if enable_volume_filter and volume_ratio > 1.3:
-            signal_strength *= 1.2
-        
-        if enable_volatility_filter and volatility_ratio > 0.06:
-            signal_strength *= 0.6
-        
-        if trend_strength > 0:
-            signal_strength *= 1.2
-        
-        signals.append(("BUY_10", buy_10_adj, signal_strength))
-    
-    # Check for sell signals
-    if day_high >= sell_5_adj:
-        signal_strength = 1.0
-        
-        if enable_rsi_filter:
-            if 55 <= rsi <= 75:
-                signal_strength *= 1.2
-            elif rsi > 80:
-                signal_strength *= 1.5  # Strong sell signal when very overbought
-            elif rsi < 50:
-                signal_strength *= 0.5
-        
-        if enable_volume_filter and volume_ratio > 1.2:
-            signal_strength *= 1.1
-        
-        if trend_strength < 0:
-            signal_strength *= 1.2  # Sell more aggressively in downtrends
-        
-        signals.append(("SELL_5", sell_5_adj, signal_strength))
-    
-    if day_high >= sell_10_adj:
-        signal_strength = 1.5
-        
-        if enable_rsi_filter:
-            if 60 <= rsi <= 80:
-                signal_strength *= 1.3
-            elif rsi > 85:
-                signal_strength *= 1.8
-            elif rsi < 55:
-                signal_strength *= 0.6
-        
-        if enable_volume_filter and volume_ratio > 1.3:
-            signal_strength *= 1.2
-        
-        if trend_strength < 0:
-            signal_strength *= 1.3
-        
-        signals.append(("SELL_10", sell_10_adj, signal_strength))
-    
-    return signals
+# -----------------------------
+# Backtest function
+# -----------------------------
+def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
+                      rsi_buy_max=60, rsi_sell_min=40,
+                      initial_cash=100000, trade_amount=10000):
+    cash = float(initial_cash)
+    shares = 0.0
 
-# -----------------------------------------
-# Simulate Enhanced Strategy
-# -----------------------------------------
-cash = float(initial_cash)
-shares = 0.0
-trades = []
-portfolio_value_over_time = []
+    # convert percentage figures to decimals
+    b = buy_drop / 100.0
+    s = sell_rise / 100.0
 
-for idx, row in df.iterrows():
-    day_close = float(row["Close"])
-    
-    # Get all signals for this day
-    signals = get_signal_strength(row, drop_pct_5, spike_pct_5, drop_pct_10, spike_pct_10,
-                                 enable_rsi_filter, enable_volume_filter, enable_volatility_filter)
-    
-    # Process signals in order of strength
-    signals.sort(key=lambda x: x[2], reverse=True)
-    
-    current_portfolio_value = cash + shares * day_close
-    max_position_value = current_portfolio_value * max_position_pct
-    
-    for signal_type, price, strength in signals:
-        if "BUY" in signal_type and cash >= trade_amount:
-            # Adjust trade amount based on signal strength
-            adjusted_trade_amount = min(trade_amount * strength, cash)
-            
-            # Respect maximum position limit
-            potential_shares_value = (shares * day_close) + adjusted_trade_amount
-            if potential_shares_value <= max_position_value:
-                qty = adjusted_trade_amount / price
-                cash -= adjusted_trade_amount
-                shares += qty
-                trades.append([idx, f"{signal_type} (Enhanced)", price, qty, cash, shares, 
-                             cash + shares * price, f"Strength: {strength:.2f}"])
-        
-        elif "SELL" in signal_type and shares > 0:
-            # Adjust trade amount based on signal strength
-            adjusted_trade_amount = min(trade_amount * strength, shares * price)
-            qty = adjusted_trade_amount / price
-            
-            if shares >= qty:
-                cash += adjusted_trade_amount
-                shares -= qty
-                trades.append([idx, f"{signal_type} (Enhanced)", price, qty, cash, shares,
-                             cash + shares * price, f"Strength: {strength:.2f}"])
-    
-    # Record daily portfolio value
-    portfolio_value_over_time.append([idx, cash + shares * day_close])
+    for _, row in data.iterrows():
+        prev_close = float(row["PrevClose"])
+        low = float(row["Low"])
+        high = float(row["High"])
+        close = float(row["Close"])
+        rsi = float(row["RSI"])
 
-# Final strategy value
-final_value = cash + shares * float(df["Close"].iloc[-1])
+        # Skip if we don't have a valid previous close
+        if np.isnan(prev_close):
+            continue
 
-# -----------------------------------------
-# Buy-and-hold comparison
-# -----------------------------------------
-initial_shares = float(initial_cash / df["Close"].iloc[0])
-buy_hold_value = df["Close"] * initial_shares
+        buy_trigger = prev_close * (1 - b)
+        sell_trigger = prev_close * (1 + s)
 
-# -----------------------------------------
-# Display Results
-# -----------------------------------------
-st.subheader("Final Results")
-col1, col2, col3 = st.columns(3)
+        # BUY condition
+        buy_cond = low <= buy_trigger
+        if use_rsi:
+            buy_cond = buy_cond and (rsi <= rsi_buy_max)
 
-with col1:
-    st.metric("Strategy Final Value", f"${final_value:,.2f}")
+        if buy_cond and cash >= trade_amount:
+            qty = trade_amount / buy_trigger
+            cash -= trade_amount
+            shares += qty
 
-with col2:
-    st.metric("Buy-and-Hold Final Value", f"${float(buy_hold_value.iloc[-1]):,.2f}")
+        # SELL condition
+        sell_cond = high >= sell_trigger
+        if use_rsi:
+            sell_cond = sell_cond and (rsi >= rsi_sell_min)
 
-with col3:
-    performance_diff = ((final_value - float(buy_hold_value.iloc[-1])) / float(buy_hold_value.iloc[-1])) * 100
-    st.metric("Performance Difference", f"{performance_diff:+.2f}%")
+        if sell_cond and shares > 0:
+            # sell up to trade_amount if possible
+            sell_value = trade_amount
+            max_sell_value = shares * sell_trigger
+            if sell_value > max_sell_value:
+                sell_value = max_sell_value
 
-# Trade log
-trades_df = pd.DataFrame(
-    trades,
-    columns=["Date", "Type", "Execution Price", "Shares", "CashAfter", "SharesAfter", "TotalValue", "Signal Strength"]
+            qty = sell_value / sell_trigger
+            shares -= qty
+            cash += sell_value
+
+    # Final portfolio value at last close
+    final_price = float(data["Close"].iloc[-1])
+    final_value = cash + shares * final_price
+    return final_value
+
+# -----------------------------
+# Grid search over thresholds
+# -----------------------------
+buy_drops = np.arange(buy_drop_min, buy_drop_max + 1e-9, buy_drop_step)
+sell_rises = np.arange(sell_rise_min, sell_rise_max + 1e-9, sell_rise_step)
+
+results = []
+best_value = -np.inf
+best_params = None
+
+progress = st.progress(0.0)
+total_iters = len(buy_drops) * len(sell_rises)
+iter_count = 0
+
+for b in buy_drops:
+    for s in sell_rises:
+        iter_count += 1
+        progress.progress(iter_count / total_iters)
+
+        final_val = backtest_triggers(
+            df,
+            buy_drop=b,
+            sell_rise=s,
+            use_rsi=use_rsi_filter,
+            rsi_buy_max=rsi_buy_max,
+            rsi_sell_min=rsi_sell_min,
+            initial_cash=initial_cash,
+            trade_amount=trade_amount
+        )
+        results.append((b, s, final_val))
+        if final_val > best_value:
+            best_value = final_val
+            best_params = (b, s)
+
+progress.empty()
+
+results_df = pd.DataFrame(results, columns=["BuyDropPct", "SellRisePct", "FinalValue"])
+results_df = results_df.sort_values("FinalValue", ascending=False)
+
+st.subheader("Best Historical Trigger Pair (5-Year Backtest)")
+if best_params is None:
+    st.write("No valid results from backtest.")
+    st.stop()
+
+best_buy, best_sell = best_params
+st.write(f"**Best Buy Drop:** {best_buy:.2f}% below previous close")
+st.write(f"**Best Sell Rise:** {best_sell:.2f}% above previous close")
+st.write(f"**Best Final Portfolio Value:** ${best_value:,.2f}")
+
+st.subheader("Top 15 Trigger Combinations")
+st.dataframe(results_df.head(15))
+
+# -----------------------------
+# Suggest today's target prices
+# -----------------------------
+latest_row = df.iloc[-1]
+latest_close = float(latest_row["Close"])
+latest_rsi = float(latest_row["RSI"])
+
+today_buy_price = latest_close * (1 - best_buy / 100.0)
+today_sell_price = latest_close * (1 + best_sell / 100.0)
+
+st.subheader("Today's Suggested Targets (Based on Best Historical Triggers)")
+
+st.write(f"**Latest Close:** ${latest_close:,.2f}")
+st.write(f"**Latest RSI (14):** {latest_rsi:.1f}")
+
+st.write(f"**Suggested Buy Trigger:** "
+         f"${today_buy_price:,.2f} ({best_buy:.2f}% below last close)")
+st.write(f"**Suggested Sell Trigger:** "
+         f"${today_sell_price:,.2f} ({best_sell:.2f}% above last close)")
+
+st.info(
+    "These levels are derived purely from 5-year historical backtest of simple triggers "
+    "and are NOT financial advice."
 )
-st.subheader("Trade Log")
-st.dataframe(trades_df)
 
-# Portfolio curves
-portfolio_df = pd.DataFrame(portfolio_value_over_time, columns=["Date", "StrategyValue"])
-portfolio_df.set_index("Date", inplace=True)
-portfolio_df["BuyHoldValue"] = buy_hold_value.values
-
-st.subheader("Portfolio Value vs Buy-and-Hold")
-st.line_chart(portfolio_df)
-
-# Additional charts
-st.subheader("TQQQ Price and Indicators")
-chart_df = df[["Close", f"MA{ma_period}", "RSI"]].copy()
-st.line_chart(chart_df)
-
-# Strategy statistics
-st.subheader("Strategy Statistics")
-if len(trades_df) > 0:
-    buy_trades = trades_df[trades_df['Type'].str.contains('BUY')]
-    sell_trades = trades_df[trades_df['Type'].str.contains('SELL')]
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write(f"**Total Trades:** {len(trades_df)}")
-        st.write(f"**Buy Trades:** {len(buy_trades)}")
-        st.write(f"**Sell Trades:** {len(sell_trades)}")
-    
-    with col2:
-        if len(portfolio_df) > 1:
-            returns = portfolio_df['StrategyValue'].pct_change().dropna()
-            volatility = returns.std() * np.sqrt(252) * 100
-            max_dd = ((portfolio_df['StrategyValue'] / portfolio_df['StrategyValue'].cummax()) - 1).min() * 100
-            
-            st.write(f"**Annual Volatility:** {volatility:.2f}%")
-            st.write(f"**Max Drawdown:** {max_dd:.2f}%")
-            st.write(f"**Total Return:** {((final_value / initial_cash) - 1) * 100:.2f}%")
+# Optional: visualize price + RSI
+st.subheader("TQQQ Close and RSI (Last 5 Years)")
+viz = df[["Close", "RSI"]].copy()
+st.line_chart(viz)
