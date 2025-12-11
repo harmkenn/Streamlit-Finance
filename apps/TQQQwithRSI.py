@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 
-st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.0")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.1")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -23,11 +23,11 @@ vol_lookback = st.sidebar.slider("Volatility lookback (days)", 10, 60, 20, 5)
 trend_ma_len = st.sidebar.slider("QQQ trend MA length (days)", 20, 200, 50, 5)
 
 # Base buy/sell ranges (in % from previous close)
-buy_min_base = st.sidebar.slider("Base min buy dip (%)", 1.0, 10.0, 2.0, 0.5)
-buy_max_base = st.sidebar.slider("Base max buy dip (%)", 2.0, 15.0, 4.0, 0.5)
+buy_min_base = st.sidebar.slider("Base min buy dip (%)", 1.0, 10.0, 3.0, 0.5)
+buy_max_base = st.sidebar.slider("Base max buy dip (%)", 2.0, 15.0, 6.5, 0.5)
 
 sell_min_base = st.sidebar.slider("Base min sell pop (%)", 1.0, 10.0, 3.0, 0.5)
-sell_max_base = st.sidebar.slider("Base max sell pop (%)", 2.0, 20.0, 5.0, 0.5)
+sell_max_base = st.sidebar.slider("Base max sell pop (%)", 2.0, 20.0, 6.5, 0.5)
 
 st.sidebar.markdown("---")
 st.sidebar.write("**Interpretation**")
