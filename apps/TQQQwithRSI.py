@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.2")
+st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.3")
 
 # -----------------------------
 # Sidebar controls
@@ -80,7 +80,7 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
         low = float(row["Low"])
         high = float(row["High"])
         close = float(row["Close"])
-         = float(row[""])
+        prev_close = float(row["PrevClose"])
 
         # Skip if we don't have a valid previous close
         if np.isnan(prev_close):
