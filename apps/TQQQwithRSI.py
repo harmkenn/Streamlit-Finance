@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.1")
+st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.2")
 
 # -----------------------------
 # Sidebar controls
@@ -15,11 +15,11 @@ years = st.sidebar.slider("Lookback (years)", 1, 10, 5)
 
 # Grid of thresholds (as percentage moves from previous close)
 buy_drop_min = st.sidebar.slider("Min buy drop (%)", 1.0, 20.0, 3.0, 0.5)
-buy_drop_max = st.sidebar.slider("Max buy drop (%)", 2.0, 30.0, 8.0, 0.5)
+buy_drop_max = st.sidebar.slider("Max buy drop (%)", 2.0, 30.0, 6.5, 0.5)
 buy_drop_step = st.sidebar.slider("Buy drop step (%)", 0.25, 5.0, 1.0, 0.25)
 
 sell_rise_min = st.sidebar.slider("Min sell rise (%)", 1.0, 20.0, 3.0, 0.5)
-sell_rise_max = st.sidebar.slider("Max sell rise (%)", 2.0, 30.0, 8.0, 0.5)
+sell_rise_max = st.sidebar.slider("Max sell rise (%)", 2.0, 30.0, 6.5, 0.5)
 sell_rise_step = st.sidebar.slider("Sell rise step (%)", 0.25, 5.0, 1.0, 0.25)
 
 use_rsi_filter = st.sidebar.checkbox("Use RSI filters", value=True)
@@ -51,7 +51,7 @@ df = df[["Open", "High", "Low", "Close"]].astype(float)
 df["PrevClose"] = df["Close"].shift(1)
 
 # RSI calculation
-def compute_rsi(series, period=50):
+def compute_rsi(series, period=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
@@ -80,7 +80,7 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
         low = float(row["Low"])
         high = float(row["High"])
         close = float(row["Close"])
-        rsi = float(row["RSI"])
+         = float(row[""])
 
         # Skip if we don't have a valid previous close
         if np.isnan(prev_close):
@@ -91,8 +91,8 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
 
         # BUY condition
         buy_cond = low <= buy_trigger
-        if use_rsi:
-            buy_cond = buy_cond and (rsi <= rsi_buy_max)
+        if use_:
+            buy_cond = buy_cond and ( <= _buy_max)
 
         if buy_cond and cash >= trade_amount:
             qty = trade_amount / buy_trigger
@@ -101,8 +101,8 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
 
         # SELL condition
         sell_cond = high >= sell_trigger
-        if use_rsi:
-            sell_cond = sell_cond and (rsi >= rsi_sell_min)
+        if use_:
+            sell_cond = sell_cond and ( >= _sell_min)
 
         if sell_cond and shares > 0:
             # sell up to trade_amount if possible
@@ -143,9 +143,9 @@ for b in buy_drops:
             df,
             buy_drop=b,
             sell_rise=s,
-            use_rsi=use_rsi_filter,
-            rsi_buy_max=rsi_buy_max,
-            rsi_sell_min=rsi_sell_min,
+            use_=use__filter,
+            _buy_max=_buy_max,
+            _sell_min=_sell_min,
             initial_cash=initial_cash,
             trade_amount=trade_amount
         )
@@ -177,7 +177,7 @@ st.dataframe(results_df.head(15))
 # -----------------------------
 latest_row = df.iloc[-1]
 latest_close = float(latest_row["Close"])
-latest_rsi = float(latest_row["RSI"])
+latest_ = float(latest_row[""])
 
 today_buy_price = latest_close * (1 - best_buy / 100.0)
 today_sell_price = latest_close * (1 + best_sell / 100.0)
@@ -185,7 +185,7 @@ today_sell_price = latest_close * (1 + best_sell / 100.0)
 st.subheader("Today's Suggested Targets (Based on Best Historical Triggers)")
 
 st.write(f"**Latest Close:** ${latest_close:,.2f}")
-st.write(f"**Latest RSI (50):** {latest_rsi:.1f}")
+st.write(f"**Latest (14):** {latest_rsi:.1f}")
 
 st.write(f"**Suggested Buy Trigger:** "
          f"${today_buy_price:,.2f} ({best_buy:.2f}% below last close)")
