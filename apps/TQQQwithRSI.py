@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI)" v3.0)
+st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.0")
 
 # -----------------------------
 # Sidebar controls
