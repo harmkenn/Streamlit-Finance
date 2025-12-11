@@ -2,186 +2,223 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from datetime import datetime, timedelta
 
-st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.4")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.0")
+
+st.write(
+    "This tool is **not financial advice**. It shows how someone *might* "
+    "think about buy/sell zones for TQQQ using recent trend, RSI, and "
+    "typical intraday behavior."
+)
 
 # -----------------------------
 # Sidebar controls
 # -----------------------------
-st.sidebar.header("Backtest Settings")
+st.sidebar.header("Settings")
 
-initial_cash = st.sidebar.number_input("Initial Cash", 10000, 500000, 100000, 10000)
-years = st.sidebar.slider("Lookback (years)", 1, 10, 5)
+lookback_days = st.sidebar.slider("Lookback window (days)", 60, 1000, 500, 10)
+rsi_period = st.sidebar.slider("RSI period", 5, 28, 14)
+vol_lookback = st.sidebar.slider("Volatility lookback (days)", 10, 60, 20, 5)
+trend_ma_len = st.sidebar.slider("QQQ trend MA length (days)", 20, 200, 50, 5)
 
-# Grid of thresholds (as percentage moves from previous close)
-buy_drop_min = st.sidebar.slider("Min buy drop (%)", 1.0, 20.0, 3.0, 0.5)
-buy_drop_max = st.sidebar.slider("Max buy drop (%)", 2.0, 30.0, 6.5, 0.5)
-buy_drop_step = st.sidebar.slider("Buy drop step (%)", 0.25, 5.0, 1.0, 0.25)
+# Base buy/sell ranges (in % from previous close)
+buy_min_base = st.sidebar.slider("Base min buy dip (%)", 1.0, 10.0, 2.0, 0.5)
+buy_max_base = st.sidebar.slider("Base max buy dip (%)", 2.0, 15.0, 4.0, 0.5)
 
-sell_rise_min = st.sidebar.slider("Min sell rise (%)", 1.0, 20.0, 3.0, 0.5)
-sell_rise_max = st.sidebar.slider("Max sell rise (%)", 2.0, 30.0, 6.5, 0.5)
-sell_rise_step = st.sidebar.slider("Sell rise step (%)", 0.25, 5.0, 1.0, 0.25)
+sell_min_base = st.sidebar.slider("Base min sell pop (%)", 1.0, 10.0, 3.0, 0.5)
+sell_max_base = st.sidebar.slider("Base max sell pop (%)", 2.0, 20.0, 5.0, 0.5)
 
-use_rsi_filter = st.sidebar.checkbox("Use RSI filters", value=True)
-rsi_buy_max = st.sidebar.slider("Max RSI for buys", 10, 90, 60)
-rsi_sell_min = st.sidebar.slider("Min RSI for sells", 10, 90, 40)
-
-trade_amount = st.sidebar.number_input("Trade size per signal ($)", 1000, 50000, 10000, 1000)
-
-st.write(
-    f"Backtesting on **TQQQ** with {years} years of daily data to "
-    f"find the best buy/sell triggers, then applying them to today's price."
+st.sidebar.markdown("---")
+st.sidebar.write("**Interpretation**")
+st.sidebar.write(
+    "- Buy zone is a *dip* below yesterday's close.\n"
+    "- Sell zone is a *pop* above yesterday's close.\n"
+    "- RSI and trend tweak these ranges."
 )
 
 # -----------------------------
-# Data loading
+# Helper functions
 # -----------------------------
-ticker = "TQQQ"
-df = yf.download(ticker, period=f"{years}y", interval="1d")
-
-if df.empty:
-    st.error("No data returned for TQQQ.")
-    st.stop()
-
-# Flatten MultiIndex if present
-if isinstance(df.columns, pd.MultiIndex):
-    df.columns = [c[0] for c in df.columns]
-
-df = df[["Open", "High", "Low", "Close"]].astype(float)
-df["PrevClose"] = df["Close"].shift(1)
-
-# RSI calculation
-def compute_rsi(series, period=14):
+def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
-    rs = gain / loss
+    gain = delta.where(delta > 0, 0.0)
+    loss = -delta.where(delta < 0, 0.0)
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+    rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-df["RSI"] = compute_rsi(df["Close"])
-df = df.dropna()
+def fetch_data(ticker: str, days: int) -> pd.DataFrame:
+    df = yf.download(ticker, period=f"{days}d", interval="1d")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [c[0] for c in df.columns]
+    return df
 
 # -----------------------------
-# Backtest function
+# Load data
 # -----------------------------
-def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
-                      rsi_buy_max=60, rsi_sell_min=40,
-                      initial_cash=100000, trade_amount=10000):
+with st.spinner("Loading TQQQ and QQQ data..."):
+    tqqq = fetch_data("TQQQ", lookback_days)
+    qqq = fetch_data("QQQ", lookback_days)
 
-    cash = float(initial_cash)
-    shares = 0.0
+if tqqq.empty or qqq.empty:
+    st.error("Could not load data for TQQQ/QQQ.")
+    st.stop()
 
-    b = buy_drop / 100.0
-    s = sell_rise / 100.0
+tqqq = tqqq[["Open", "High", "Low", "Close"]].astype(float)
+qqq = qqq[["Close"]].astype(float)
 
-    for _, row in data.iterrows():
-        prev_close = float(row["PrevClose"])
-        low = float(row["Low"])
-        high = float(row["High"])
-        rsi = float(row["RSI"])
+# Compute RSI on TQQQ
+tqqq["RSI"] = compute_rsi(tqqq["Close"], period=rsi_period)
 
-        if np.isnan(prev_close):
-            continue
+# Compute daily returns and volatility proxy (TQQQ)
+tqqq["Return"] = tqqq["Close"].pct_change()
+tqqq["Volatility"] = tqqq["Return"].rolling(vol_lookback).std() * np.sqrt(252)
 
-        buy_trigger = prev_close * (1 - b)
-        sell_trigger = prev_close * (1 + s)
+# Compute QQQ trend
+qqq[f"MA{trend_ma_len}"] = qqq["Close"].rolling(trend_ma_len).mean()
+qqq["TrendUp"] = qqq["Close"] > qqq[f"MA{trend_ma_len}"]
 
-        # BUY
-        buy_cond = low <= buy_trigger
-        if use_rsi:
-            buy_cond = buy_cond and (rsi <= rsi_buy_max)
+# Align latest dates
+common_index = tqqq.index.intersection(qqq.index)
+tqqq = tqqq.loc[common_index].copy()
+qqq = qqq.loc[common_index].copy()
 
-        if buy_cond and cash >= trade_amount:
-            qty = trade_amount / buy_trigger
-            cash -= trade_amount
-            shares += qty
+tqqq["QQQ_TrendUp"] = qqq["TrendUp"]
 
-        # SELL
-        sell_cond = high >= sell_trigger
-        if use_rsi:
-            sell_cond = sell_cond and (rsi >= rsi_sell_min)
+# Drop early NaNs
+tqqq = tqqq.dropna()
 
-        if sell_cond and shares > 0:
-            sell_value = min(trade_amount, shares * sell_trigger)
-            qty = sell_value / sell_trigger
-            shares -= qty
-            cash += sell_value
-
-    final_price = float(data["Close"].iloc[-1])
-    return cash + shares * final_price
+if tqqq.empty:
+    st.error("Not enough overlapping data after indicators.")
+    st.stop()
 
 # -----------------------------
-# Grid search
+# Today's context
 # -----------------------------
-buy_drops = np.arange(buy_drop_min, buy_drop_max + 1e-9, buy_drop_step)
-sell_rises = np.arange(sell_rise_min, sell_rise_max + 1e-9, sell_rise_step)
+latest = tqqq.iloc[-1]
+prev = tqqq.iloc[-2] if len(tqqq) >= 2 else None
 
-results = []
-best_value = -np.inf
-best_params = None
+latest_close = float(latest["Close"])
+latest_rsi = float(latest["RSI"])
+latest_vol = float(latest["Volatility"])
+trend_up = bool(latest["QQQ_TrendUp"])
 
-progress = st.progress(0.0)
-total_iters = len(buy_drops) * len(sell_rises)
-iter_count = 0
+st.subheader("Today's Context")
 
-for b in buy_drops:
-    for s in sell_rises:
-        iter_count += 1
-        progress.progress(iter_count / total_iters)
+st.write(f"**Latest trading day:** {latest.name.date()}")
+st.write(f"**TQQQ close:** ${latest_close:,.2f}")
+st.write(f"**RSI ({rsi_period}):** {latest_rsi:.1f}")
+st.write(f"**QQQ trend ({trend_ma_len}-day MA):** {'Uptrend' if trend_up else 'Downtrend/Sideways'}")
+st.write(f"**TQQQ annualized volatility (approx):** {latest_vol:.2%}")
 
-        final_val = backtest_triggers(
-            df,
-            buy_drop=b,
-            sell_rise=s,
-            use_rsi=use_rsi_filter,
-            rsi_buy_max=rsi_buy_max,
-            rsi_sell_min=rsi_sell_min,
-            initial_cash=initial_cash,
-            trade_amount=trade_amount
-        )
-
-        results.append((b, s, final_val))
-
-        if final_val > best_value:
-            best_value = final_val
-            best_params = (b, s)
-
-progress.empty()
-
-results_df = pd.DataFrame(results, columns=["BuyDropPct", "SellRisePct", "FinalValue"])
-results_df = results_df.sort_values("FinalValue", ascending=False)
+if prev is not None:
+    prev_close = float(prev["Close"])
+    day_change = (latest_close / prev_close - 1) * 100
+    st.write(f"**Change vs previous close:** {day_change:+.2f}%")
+else:
+    prev_close = latest_close
+    st.info("Not enough data for previous close comparison; using latest close as reference.")
+    day_change = 0.0
 
 # -----------------------------
-# Results
+# Derive buy/sell zones
 # -----------------------------
-st.subheader("Best Historical Trigger Pair (5-Year Backtest)")
 
-best_buy, best_sell = best_params
-st.write(f"**Best Buy Drop:** {best_buy:.2f}%")
-st.write(f"**Best Sell Rise:** {best_sell:.2f}%")
-st.write(f"**Best Final Portfolio Value:** ${best_value:,.2f}")
+# 1. Start with base ranges (as % from previous close)
+buy_min = buy_min_base
+buy_max = buy_max_base
+sell_min = sell_min_base
+sell_max = sell_max_base
 
-st.subheader("Top 15 Trigger Combinations")
-st.dataframe(results_df.head(15))
+# 2. Adjust based on RSI regime
+#    - Low RSI: buy smaller dips, sell smaller pops (expect oversold bounces)
+#    - High RSI: buy deeper dips, sell sooner (expect mean reversion)
+if latest_rsi < 40:
+    # More eager to buy, less greedy on sells
+    buy_min *= 0.7
+    buy_max *= 0.8
+    sell_min *= 0.8
+    sell_max *= 0.9
+elif latest_rsi > 60:
+    # More cautious buys, quicker profit-taking
+    buy_min *= 1.1
+    buy_max *= 1.2
+    sell_min *= 0.9
+    sell_max *= 0.95
+# RSI 40–60 → no change (neutral)
+
+# 3. Adjust based on trend (QQQ)
+if trend_up:
+    # Uptrend: buy shallower dips, accept smaller profit targets
+    buy_min *= 0.9
+    buy_max *= 0.9
+    sell_min *= 0.9
+    sell_max *= 0.95
+else:
+    # Not in clear uptrend: be pickier on buys, keep sells closer
+    buy_min *= 1.1
+    buy_max *= 1.2
+    sell_min *= 0.9
+    sell_max *= 0.95
+
+# 4. Sanity: enforce ordering
+buy_min = max(0.5, min(buy_min, buy_max - 0.25))
+sell_min = max(0.5, min(sell_min, sell_max - 0.25))
+
+# 5. Translate % zones into price levels using previous close
+ref_price = prev_close  # we anchor on yesterday's close for "dip/pop"
+buy_zone_low_price = ref_price * (1 - buy_max / 100.0)
+buy_zone_high_price = ref_price * (1 - buy_min / 100.0)
+
+sell_zone_low_price = ref_price * (1 + sell_min / 100.0)
+sell_zone_high_price = ref_price * (1 + sell_max / 100.0)
 
 # -----------------------------
-# Today's target prices
+# Display zones
 # -----------------------------
-latest_row = df.iloc[-1]
-latest_close = float(latest_row["Close"])
-latest_rsi = float(latest_row["RSI"])
+st.subheader("Suggested Buy/Sell Zones for Today")
 
-today_buy_price = latest_close * (1 - best_buy / 100.0)
-today_sell_price = latest_close * (1 + best_sell / 100.0)
+st.markdown("**These are *zones*, not exact levels.** They are based on:")
+st.markdown(
+"- Typical % moves of TQQQ from the prior close\n"
+"- Whether RSI is low/neutral/high\n"
+"- Whether QQQ is in an uptrend or not"
+)
 
-st.subheader("Today's Suggested Targets")
+col1, col2 = st.columns(2)
 
-st.write(f"**Latest Close:** ${latest_close:,.2f}")
-st.write(f"**Latest RSI (14):** {latest_rsi:.1f}")
-st.write(f"**Suggested Buy Trigger:** ${today_buy_price:,.2f}")
-st.write(f"**Suggested Sell Trigger:** ${today_sell_price:,.2f}")
+with col1:
+    st.markdown("### Buy Zone (Dip Below Previous Close)")
+    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
+    st.write(
+        f"**Dip range:** {buy_min:.2f}% to {buy_max:.2f}% below ref\n"
+        f"**Price zone:** ${buy_zone_low_price:,.2f} – ${buy_zone_high_price:,.2f}"
+    )
 
-st.subheader("TQQQ Close and RSI (Last 5 Years)")
-viz = df[["Close", "RSI"]].copy()
-st.line_chart(viz)
+with col2:
+    st.markdown("### Sell Zone (Pop Above Previous Close)")
+    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
+    st.write(
+        f"**Pop range:** {sell_min:.2f}% to {sell_max:.2f}% above ref\n"
+        f"**Price zone:** ${sell_zone_low_price:,.2f} – ${sell_zone_high_price:,.2f}"
+    )
+
+st.info(
+    "This is a *framework* for thinking about TQQQ entries/exits, not a signal generator. "
+    "It adjusts generic % dip/pop zones based on today's RSI and the QQQ trend."
+)
+
+# -----------------------------
+# Visuals
+# -----------------------------
+st.subheader("TQQQ Price and RSI")
+
+price_rsi = tqqq[["Close", "RSI"]].copy()
+st.line_chart(price_rsi)
+
+st.subheader("QQQ Trend vs Moving Average")
+qqq_viz = qqq[[ "Close", f"MA{trend_ma_len}"]].dropna().copy()
+st.line_chart(qqq_viz)
