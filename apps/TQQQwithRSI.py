@@ -102,7 +102,7 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
         # SELL condition
         sell_cond = high >= sell_trigger
         if use_:
-            sell_cond = sell_cond and ( >= _sell_min)
+            sell_cond = sell_cond and (rsi >= _sell_min)
 
         if sell_cond and shares > 0:
             # sell up to trade_amount if possible
