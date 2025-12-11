@@ -19,7 +19,8 @@ sub_app_names = {
     'TQQQpriceLHC.py': 'TQQQ',
     'UPRO.py': 'UPRO',
     'UDOW.py': 'UDOW',
-    'TQQQwithRSI.py': 'TQQQ with RSI'
+    'TQQQwithRSI.py': 'TQQQ with RSI',
+    'UPROwithRSI.py': 'UPRO with RSI'
 }
 
 # Get a list of .py files from the SubApps folder
