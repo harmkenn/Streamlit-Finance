@@ -92,7 +92,7 @@ def backtest_triggers(data, buy_drop, sell_rise, use_rsi=True,
         # BUY condition
         buy_cond = low <= buy_trigger
         if use_:
-            buy_cond = buy_cond and ( <= _buy_max)
+            buy_cond = buy_cond and (rsi <= rsi_buy_max)
 
         if buy_cond and cash >= trade_amount:
             qty = trade_amount / buy_trigger
