@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.0")
+st.title("TQQQ 5-Year Trigger Optimizer (OHLC + RSI) v3.1")
 
 # -----------------------------
 # Sidebar controls
@@ -51,7 +51,7 @@ df = df[["Open", "High", "Low", "Close"]].astype(float)
 df["PrevClose"] = df["Close"].shift(1)
 
 # RSI calculation
-def compute_rsi(series, period=14):
+def compute_rsi(series, period=50):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
@@ -185,7 +185,7 @@ today_sell_price = latest_close * (1 + best_sell / 100.0)
 st.subheader("Today's Suggested Targets (Based on Best Historical Triggers)")
 
 st.write(f"**Latest Close:** ${latest_close:,.2f}")
-st.write(f"**Latest RSI (14):** {latest_rsi:.1f}")
+st.write(f"**Latest RSI (50):** {latest_rsi:.1f}")
 
 st.write(f"**Suggested Buy Trigger:** "
          f"${today_buy_price:,.2f} ({best_buy:.2f}% below last close)")
