@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 
-st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.3")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.4")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -51,9 +51,12 @@ def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return rsi
 
 def fetch_data(ticker: str, days: int) -> pd.DataFrame:
-    df = yf.download(ticker, period=f"{days}d", interval="1d")
+    end = datetime.now()
+    start = end - timedelta(days=days)
+    df = yf.download(ticker, start=start, end=end + timedelta(days=1), interval="1d")
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [c[0] for c in df.columns]
+    df = df[df["Volume"] > 0]  # remove placeholder rows
     return df
 
 # -----------------------------
@@ -67,7 +70,7 @@ if tqqq.empty or qqq.empty:
     st.error("Could not load data for TQQQ/QQQ.")
     st.stop()
 
-tqqq = tqqq[["Open", "High", "Low", "Close"]].astype(float)
+tqqq = tqqq[["Open", "High", "Low", "Close", "Volume"]].astype(float)
 qqq = qqq[["Close"]].astype(float)
 
 # Compute RSI on TQQQ
@@ -99,78 +102,68 @@ if tqqq.empty:
 # Today's context
 # -----------------------------
 latest = tqqq.iloc[-1]
-prev = tqqq.iloc[-2] if len(tqqq) >= 2 else None
+prev = tqqq.iloc[-2]
 
 latest_close = float(latest["Close"])
+prev_close = float(prev["Close"])  # ✅ THIS IS NOW THE REFERENCE CLOSE
 latest_rsi = float(latest["RSI"])
 latest_vol = float(latest["Volatility"])
 trend_up = bool(latest["QQQ_TrendUp"])
 
+# ✅ Explicit reference close
+ref_price = prev_close
+
 st.subheader("Today's Context")
 
-st.write(f"**Latest trading day:** {latest.name.date()}")
-st.write(f"**TQQQ close:** ${latest_close:,.2f}")
+st.write(f"**Latest trading day in data:** {latest.name.date()}")
+st.write(f"**Latest close (most recent row):** ${latest_close:,.2f}")
+st.write(f"**Reference close (yesterday):** ${ref_price:,.2f}")
+
+day_change = (latest_close / prev_close - 1) * 100
+st.write(f"**Change vs yesterday:** {day_change:+.2f}%")
+
 st.write(f"**RSI ({rsi_period}):** {latest_rsi:.1f}")
 st.write(f"**QQQ trend ({trend_ma_len}-day MA):** {'Uptrend' if trend_up else 'Downtrend/Sideways'}")
 st.write(f"**TQQQ annualized volatility (approx):** {latest_vol:.2%}")
-
-if prev is not None:
-    prev_close = float(prev["Close"])
-    day_change = (latest_close / prev_close - 1) * 100
-    st.write(f"**Change vs previous close:** {day_change:+.2f}%")
-else:
-    prev_close = latest_close
-    st.info("Not enough data for previous close comparison; using latest close as reference.")
-    day_change = 0.0
 
 # -----------------------------
 # Derive buy/sell zones
 # -----------------------------
 
-# 1. Start with base ranges (as % from previous close)
 buy_min = buy_min_base
 buy_max = buy_max_base
 sell_min = sell_min_base
 sell_max = sell_max_base
 
-# 2. Adjust based on RSI regime
-#    - Low RSI: buy smaller dips, sell smaller pops (expect oversold bounces)
-#    - High RSI: buy deeper dips, sell sooner (expect mean reversion)
+# RSI adjustments
 if latest_rsi < 40:
-    # More eager to buy, less greedy on sells
     buy_min *= 0.7
     buy_max *= 0.8
     sell_min *= 0.8
     sell_max *= 0.9
 elif latest_rsi > 60:
-    # More cautious buys, quicker profit-taking
     buy_min *= 1.1
     buy_max *= 1.2
     sell_min *= 0.9
     sell_max *= 0.95
-# RSI 40–60 → no change (neutral)
 
-# 3. Adjust based on trend (QQQ)
+# Trend adjustments
 if trend_up:
-    # Uptrend: buy shallower dips, accept smaller profit targets
     buy_min *= 0.9
     buy_max *= 0.9
     sell_min *= 0.9
     sell_max *= 0.95
 else:
-    # Not in clear uptrend: be pickier on buys, keep sells closer
     buy_min *= 1.1
     buy_max *= 1.2
     sell_min *= 0.9
     sell_max *= 0.95
 
-# 4. Sanity: enforce ordering
+# Sanity
 buy_min = max(0.5, min(buy_min, buy_max - 0.25))
 sell_min = max(0.5, min(sell_min, sell_max - 0.25))
 
-# 5. Translate % zones into price levels using LATEST close (Friday's close)
-ref_price = float(prev["Close"])
-  # Changed from prev_close to latest_close
+# ✅ BUY/SELL ZONES NOW USE ref_price (yesterday's close)
 buy_zone_low_price = ref_price * (1 - buy_max / 100.0)
 buy_zone_high_price = ref_price * (1 - buy_min / 100.0)
 
@@ -182,44 +175,33 @@ sell_zone_high_price = ref_price * (1 + sell_max / 100.0)
 # -----------------------------
 st.subheader("Suggested Buy/Sell Zones for Today")
 
-st.markdown("**These are *zones*, not exact levels.** They are based on:")
-st.markdown(
-"- Typical % moves of TQQQ from the latest close\n"
-"- Whether RSI is low/neutral/high\n"
-"- Whether QQQ is in an uptrend or not"
-)
-
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### Buy Zone (Dip Below Latest Close)")
-    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
+    st.markdown("### Buy Zone (Dip Below Yesterday's Close)")
+    st.write(f"**Reference:** ${ref_price:,.2f}")
     st.write(
         f"**Dip range:** {buy_min:.2f}% to {buy_max:.2f}% below ref\n"
         f"**Price zone:** ${buy_zone_low_price:,.2f} – ${buy_zone_high_price:,.2f}"
     )
 
 with col2:
-    st.markdown("### Sell Zone (Pop Above Latest Close)")
-    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
+    st.markdown("### Sell Zone (Pop Above Yesterday's Close)")
+    st.write(f"**Reference:** ${ref_price:,.2f}")
     st.write(
         f"**Pop range:** {sell_min:.2f}% to {sell_max:.2f}% above ref\n"
         f"**Price zone:** ${sell_zone_low_price:,.2f} – ${sell_zone_high_price:,.2f}"
     )
 
 st.info(
-    "This is a *framework* for thinking about TQQQ entries/exits, not a signal generator. "
-    "It adjusts generic % dip/pop zones based on today's RSI and the QQQ trend."
+    "This framework always measures from **yesterday's close**, even on weekends or early Mondays."
 )
 
 # -----------------------------
 # Visuals
 # -----------------------------
 st.subheader("TQQQ Price and RSI")
-
-price_rsi = tqqq[["Close", "RSI"]].copy()
-st.line_chart(price_rsi)
+st.line_chart(tqqq[["Close", "RSI"]])
 
 st.subheader("QQQ Trend vs Moving Average")
-qqq_viz = qqq[[ "Close", f"MA{trend_ma_len}"]].dropna().copy()
-st.line_chart(qqq_viz)
+st.line_chart(qqq[["Close", f"MA{trend_ma_len}"]].dropna())
