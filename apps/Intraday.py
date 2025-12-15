@@ -6,7 +6,7 @@ from datetime import datetime
 
 # Page configuration
 st.set_page_config(page_title="Intraday Stock Prices", layout="wide")
-st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours)")
+st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours) v5.0")
 
 # --- User input for stock symbol ---
 col1, col2, col3 = st.columns(3)
@@ -130,32 +130,44 @@ if tickers_list:
         try:
             yf_t = yf.Ticker(t)
 
-            # Get today's intraday with pre/post
+            # ✅ Today's intraday with pre/post
             t_data = yf_t.history(period="1d", interval="1m", prepost=True)
 
-            # Get last 60 days for high/low range
+            # ✅ 60-day daily candles (for high/low range only)
             month_data = yf_t.history(period="2mo", interval="1d")
 
-            if not t_data.empty and not month_data.empty:
-                # Get yesterday's close (most recent close before today)
-                prev_close = month_data["Close"].iloc[-2]  # Use the second-to-last available close
+            # ✅ Build yesterday's close from intraday (reliable)
+            intraday = yf_t.history(period="10d", interval="5m", prepost=True)
 
-                # Get the latest price
+            if not intraday.empty:
+                intraday = intraday.tz_convert("America/New_York")
+                regular = intraday.between_time("09:30", "16:00")
+                daily_from_intraday = regular.groupby(regular.index.date).last()
+
+                if len(daily_from_intraday) >= 2:
+                    prev_close = daily_from_intraday["Close"].iloc[-2]   # ✅ REAL yesterday
+                else:
+                    prev_close = None
+            else:
+                prev_close = None
+
+            if not t_data.empty and prev_close is not None and not month_data.empty:
+                # ✅ Latest price
                 latest = t_data["Close"].iloc[-1]
 
-                # Calculate price difference and percentage change from yesterday's close
+                # ✅ Correct percent change
                 price_diff = latest - prev_close
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 color = "green" if percent_diff >= 0 else "red"
 
-                # 60-day high/low
+                # ✅ 60-day high/low
                 high_60d = month_data["High"].max()
                 low_60d = month_data["Low"].min()
 
-                # Position of current price in 60-day range
+                # ✅ Position in 60-day range
                 position = (latest - low_60d) / (high_60d - low_60d) * 100 if high_60d != low_60d else 50
 
-                # Simple bar indicator
+                # ✅ Range bar
                 bar_html = f"""
                 <div style='width:100%; height:6px; background:#ddd; border-radius:3px; margin-top:2px; margin-bottom:6px; position:relative;'>
                     <div style='position:absolute; left:{position}%; top:0; transform:translateX(-50%);
@@ -164,7 +176,7 @@ if tickers_list:
                 <small>60-day range: ${low_60d:.2f} – ${high_60d:.2f}</small>
                 """
 
-                # Display
+                # ✅ Display
                 st.sidebar.markdown(
                     f"**{t}**: ${latest:.2f} "
                     f"<span style='color:{color}'>({percent_diff:+.2f}%)</span>",
