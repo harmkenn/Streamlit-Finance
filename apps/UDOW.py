@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.title("UDOW Trigger Strategy (MA-Adjusted) vs Buy-and-Hold")
+st.title("UDOW Trigger Strategy (MA-Adjusted) vs Buy-and-Hold v5.0")
 
 # -----------------------------------------
 # Strategy parameters with sliders
@@ -50,8 +50,20 @@ df = df.dropna()
 # -----------------------------------------
 # Next-day trigger preview
 # -----------------------------------------
-last_close = float(df["Close"].iloc[-1])
+# ✅ Build yesterday's close from intraday (reliable)
+intraday = yf.Ticker("UDOW").history(period="10d", interval="5m", prepost=True)
+
+intraday = intraday.tz_convert("America/New_York")
+regular = intraday.between_time("09:30", "16:00")
+
+daily_from_intraday = regular.groupby(regular.index.date).last()
+
+# ✅ Latest daily close (yesterday)
+last_close = float(daily_from_intraday["Close"].iloc[-1])
+
+# ✅ Moving average still comes from your daily df
 ma_last = float(df[f"MA{ma_period}"].iloc[-1])
+
 
 # 5% triggers
 buy_5_price = last_close * (1 - drop_pct_5)
