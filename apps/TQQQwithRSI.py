@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 
-st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.2")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.3")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -169,7 +169,8 @@ buy_min = max(0.5, min(buy_min, buy_max - 0.25))
 sell_min = max(0.5, min(sell_min, sell_max - 0.25))
 
 # 5. Translate % zones into price levels using LATEST close (Friday's close)
-ref_price = latest_close  # Changed from prev_close to latest_close
+ref_price = float(prev["Close"])
+  # Changed from prev_close to latest_close
 buy_zone_low_price = ref_price * (1 - buy_max / 100.0)
 buy_zone_high_price = ref_price * (1 - buy_min / 100.0)
 
