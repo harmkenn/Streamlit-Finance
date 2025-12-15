@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 
-st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.1")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.2")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -168,8 +168,8 @@ else:
 buy_min = max(0.5, min(buy_min, buy_max - 0.25))
 sell_min = max(0.5, min(sell_min, sell_max - 0.25))
 
-# 5. Translate % zones into price levels using previous close
-ref_price = prev_close  # we anchor on yesterday's close for "dip/pop"
+# 5. Translate % zones into price levels using LATEST close (Friday's close)
+ref_price = latest_close  # Changed from prev_close to latest_close
 buy_zone_low_price = ref_price * (1 - buy_max / 100.0)
 buy_zone_high_price = ref_price * (1 - buy_min / 100.0)
 
@@ -183,7 +183,7 @@ st.subheader("Suggested Buy/Sell Zones for Today")
 
 st.markdown("**These are *zones*, not exact levels.** They are based on:")
 st.markdown(
-"- Typical % moves of TQQQ from the prior close\n"
+"- Typical % moves of TQQQ from the latest close\n"
 "- Whether RSI is low/neutral/high\n"
 "- Whether QQQ is in an uptrend or not"
 )
@@ -191,16 +191,16 @@ st.markdown(
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### Buy Zone (Dip Below Previous Close)")
-    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
+    st.markdown("### Buy Zone (Dip Below Latest Close)")
+    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
     st.write(
         f"**Dip range:** {buy_min:.2f}% to {buy_max:.2f}% below ref\n"
         f"**Price zone:** ${buy_zone_low_price:,.2f} – ${buy_zone_high_price:,.2f}"
     )
 
 with col2:
-    st.markdown("### Sell Zone (Pop Above Previous Close)")
-    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
+    st.markdown("### Sell Zone (Pop Above Latest Close)")
+    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
     st.write(
         f"**Pop range:** {sell_min:.2f}% to {sell_max:.2f}% above ref\n"
         f"**Price zone:** ${sell_zone_low_price:,.2f} – ${sell_zone_high_price:,.2f}"
