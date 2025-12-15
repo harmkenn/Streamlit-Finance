@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-st.title("UPRO Dabble Helper – Buy/Sell Zones for Today v1.0")
+st.title("UPRO Dabble Helper – Buy/Sell Zones for Today v4.2")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -31,8 +31,8 @@ sell_max_base = st.sidebar.slider("Base max sell pop (%)", 1.0, 20.0, 4.0, 0.25)
 st.sidebar.markdown("---")
 st.sidebar.write("**Interpretation**")
 st.sidebar.write(
-    "- Buy zone is a *dip* below yesterday's close.\n"
-    "- Sell zone is a *pop* above yesterday's close.\n"
+    "- Buy zone is a *dip* below latest close.\n"
+    "- Sell zone is a *pop* above latest close.\n"
     "- RSI and trend tweak these ranges."
 )
 
@@ -158,8 +158,8 @@ else:
 buy_min = max(0.25, min(buy_min, buy_max - 0.1))
 sell_min = max(0.25, min(sell_min, sell_max - 0.1))
 
-# Convert to price zones
-ref_price = prev_close
+# Convert to price zones using LATEST close instead of previous close
+ref_price = latest_close  # Changed from prev_close to latest_close
 buy_zone_low_price = ref_price * (1 - buy_max / 100.0)
 buy_zone_high_price = ref_price * (1 - buy_min / 100.0)
 
@@ -174,16 +174,16 @@ st.subheader("Suggested Buy/Sell Zones for Today")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### Buy Zone (Dip Below Previous Close)")
-    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
+    st.markdown("### Buy Zone (Dip Below Latest Close)")
+    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
     st.write(
         f"**Dip range:** {buy_min:.2f}% to {buy_max:.2f}% below ref\n"
         f"**Price zone:** ${buy_zone_low_price:,.2f} – ${buy_zone_high_price:,.2f}"
     )
 
 with col2:
-    st.markdown("### Sell Zone (Pop Above Previous Close)")
-    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
+    st.markdown("### Sell Zone (Pop Above Latest Close)")
+    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
     st.write(
         f"**Pop range:** {sell_min:.2f}% to {sell_max:.2f}% above ref\n"
         f"**Price zone:** ${sell_zone_low_price:,.2f} – ${sell_zone_high_price:,.2f}"
