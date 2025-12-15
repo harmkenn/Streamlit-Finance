@@ -2,13 +2,16 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from datetime import datetime, timedelta
 
-st.title("UPRO Dabble Helper – Buy/Sell Zones for Today v4.2")
+st.title("UPRO Dabble Helper – Buy/Sell Zones (Intraday-Derived Daily) v5.0")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
     "think about buy/sell zones for UPRO using recent trend, RSI, and "
-    "typical intraday behavior."
+    "typical intraday behavior.\n\n"
+    "Daily prices are reconstructed from 5-minute intraday data to avoid missing days "
+    "in Yahoo's daily candles."
 )
 
 # -----------------------------
@@ -16,24 +19,25 @@ st.write(
 # -----------------------------
 st.sidebar.header("Settings")
 
-lookback_days = st.sidebar.slider("Lookback window (days)", 60, 1000, 500, 10)
-rsi_period = st.sidebar.slider("RSI period", 5, 28, 14)
-vol_lookback = st.sidebar.slider("Volatility lookback (days)", 10, 60, 20, 5)
-trend_ma_len = st.sidebar.slider("SPY trend MA length (days)", 20, 200, 50, 5)
+lookback_days = st.sidebar.slider("Lookback window (calendar days, intraday)", 20, 120, 60, 5)
+rsi_period = st.sidebar.slider("RSI period (daily bars)", 5, 28, 14)
+vol_lookback = st.sidebar.slider("Volatility lookback (daily bars)", 10, 60, 20, 5)
+trend_ma_len = st.sidebar.slider("SPY trend MA length (daily bars)", 20, 200, 50, 5)
 
 # Base buy/sell ranges (in % from previous close)
-buy_min_base = st.sidebar.slider("Base min buy dip (%)", 0.5, 10.0, 1.5, 0.25)
-buy_max_base = st.sidebar.slider("Base max buy dip (%)", 1.0, 15.0, 3.5, 0.25)
+buy_min_base = st.sidebar.slider("Base min buy dip (%)", 1.0, 10.0, 3.0, 0.5)
+buy_max_base = st.sidebar.slider("Base max buy dip (%)", 2.0, 15.0, 6.5, 0.5)
 
-sell_min_base = st.sidebar.slider("Base min sell pop (%)", 0.5, 10.0, 2.0, 0.25)
-sell_max_base = st.sidebar.slider("Base max sell pop (%)", 1.0, 20.0, 4.0, 0.25)
+sell_min_base = st.sidebar.slider("Base min sell pop (%)", 1.0, 10.0, 3.0, 0.5)
+sell_max_base = st.sidebar.slider("Base max sell pop (%)", 2.0, 20.0, 6.5, 0.5)
 
 st.sidebar.markdown("---")
 st.sidebar.write("**Interpretation**")
 st.sidebar.write(
-    "- Buy zone is a *dip* below latest close.\n"
-    "- Sell zone is a *pop* above latest close.\n"
-    "- RSI and trend tweak these ranges."
+    "- Buy zone is a *dip* below **yesterday's close**.\n"
+    "- Sell zone is a *pop* above **yesterday's close**.\n"
+    "- RSI and SPY trend tweak these ranges.\n"
+    "- All daily values are derived from intraday (regular-hours) data."
 )
 
 # -----------------------------
@@ -49,81 +53,110 @@ def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-def fetch_data(ticker: str, days: int) -> pd.DataFrame:
-    df = yf.download(ticker, period=f"{days}d", interval="1d")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [c[0] for c in df.columns]
-    return df
+def build_daily_from_intraday(ticker: str, days: int) -> pd.DataFrame:
+    """
+    Fetch intraday 5m data and build daily OHLC from regular-hours candles.
+    """
+    yf_t = yf.Ticker(ticker)
+    intraday = yf_t.history(period=f"{days}d", interval="5m", prepost=True)
+
+    if intraday.empty:
+        return pd.DataFrame()
+
+    # Ensure timezone and restrict to regular-hours
+    if intraday.index.tz is None:
+        intraday = intraday.tz_localize("America/New_York")
+    else:
+        intraday = intraday.tz_convert("America/New_York")
+
+    regular = intraday.between_time("09:30", "16:00")
+
+    if regular.empty:
+        return pd.DataFrame()
+
+    # Aggregate to daily OHLC from regular-hours data
+    daily = regular.groupby(regular.index.date).agg(
+        Open=("Open", "first"),
+        High=("High", "max"),
+        Low=("Low", "min"),
+        Close=("Close", "last"),
+        Volume=("Volume", "sum"),
+    )
+
+    daily.index = pd.to_datetime(daily.index)
+    daily = daily.sort_index()
+
+    return daily
 
 # -----------------------------
-# Load data
+# Load data via intraday → daily
 # -----------------------------
-with st.spinner("Loading UPRO and SPY data..."):
-    upro = fetch_data("UPRO", lookback_days)
-    spy = fetch_data("SPY", lookback_days)
+with st.spinner("Loading intraday-derived daily data for UPRO and SPY..."):
+    upro_daily = build_daily_from_intraday("UPRO", lookback_days)
+    spy_daily = build_daily_from_intraday("SPY", lookback_days)
 
-if upro.empty or spy.empty:
-    st.error("Could not load data for UPRO/SPY.")
+if upro_daily.empty or spy_daily.empty:
+    st.error("Could not build daily data from intraday for UPRO/SPY.")
     st.stop()
 
-upro = upro[["Open", "High", "Low", "Close"]].astype(float)
-spy = spy[["Close"]].astype(float)
-
-# Compute RSI on UPRO
+# -----------------------------
+# Indicators on daily data
+# -----------------------------
+# UPRO: RSI, returns, volatility
+upro = upro_daily.copy()
 upro["RSI"] = compute_rsi(upro["Close"], period=rsi_period)
-
-# Compute daily returns and volatility proxy (UPRO)
 upro["Return"] = upro["Close"].pct_change()
 upro["Volatility"] = upro["Return"].rolling(vol_lookback).std() * np.sqrt(252)
 
-# Compute SPY trend
+# SPY: moving average trend
+spy = spy_daily.copy()
 spy[f"MA{trend_ma_len}"] = spy["Close"].rolling(trend_ma_len).mean()
 spy["TrendUp"] = spy["Close"] > spy[f"MA{trend_ma_len}"]
 
-# Align latest dates
-common_index = upro.index.intersection(spy.index)
-upro = upro.loc[common_index].copy()
-spy = spy.loc[common_index].copy()
+# Merge SPY trend into UPRO without shrinking UPRO; align on date, forward-fill
+upro = upro.join(spy["TrendUp"], how="left")
+upro["TrendUp"] = upro["TrendUp"].ffill()
 
-upro["SPY_TrendUp"] = spy["TrendUp"]
+# Drop early NaNs where indicators are not ready
+upro = upro.dropna(subset=["RSI", "Volatility", "TrendUp"])
 
-# Drop early NaNs
-upro = upro.dropna()
-
-if upro.empty:
-    st.error("Not enough overlapping data after indicators.")
+if len(upro) < 3:
+    st.error("Not enough daily bars after computing indicators.")
     st.stop()
 
 # -----------------------------
-# Today's context
+# Today's context (daily from intraday)
 # -----------------------------
 latest = upro.iloc[-1]
-prev = upro.iloc[-2] if len(upro) >= 2 else None
+prev = upro.iloc[-2]
+
+latest_date = latest.name.date()
+prev_date = prev.name.date()
 
 latest_close = float(latest["Close"])
+prev_close = float(prev["Close"])  # yesterday's close
 latest_rsi = float(latest["RSI"])
 latest_vol = float(latest["Volatility"])
-trend_up = bool(latest["SPY_TrendUp"])
+trend_up = bool(latest["TrendUp"])
+
+# Reference is explicitly yesterday's close
+ref_price = prev_close
 
 st.subheader("Today's Context")
 
-st.write(f"**Latest trading day:** {latest.name.date()}")
+st.write(f"**Latest trading day:** {latest_date}")
 st.write(f"**UPRO close:** ${latest_close:,.2f}")
+st.write(f"**Reference close (yesterday):** {prev_date} — ${ref_price:,.2f}")
+
+day_change = (latest_close / ref_price - 1) * 100
+st.write(f"**Change vs yesterday's close:** {day_change:+.2f}%")
+
 st.write(f"**RSI ({rsi_period}):** {latest_rsi:.1f}")
 st.write(f"**SPY trend ({trend_ma_len}-day MA):** {'Uptrend' if trend_up else 'Downtrend/Sideways'}")
 st.write(f"**UPRO annualized volatility (approx):** {latest_vol:.2%}")
 
-if prev is not None:
-    prev_close = float(prev["Close"])
-    day_change = (latest_close / prev_close - 1) * 100
-    st.write(f"**Change vs previous close:** {day_change:+.2f}%")
-else:
-    prev_close = latest_close
-    st.info("Not enough data for previous close comparison; using latest close as reference.")
-    day_change = 0.0
-
 # -----------------------------
-# Derive buy/sell zones
+# Derive buy/sell zones from yesterday's close
 # -----------------------------
 buy_min = buy_min_base
 buy_max = buy_max_base
@@ -132,11 +165,13 @@ sell_max = sell_max_base
 
 # RSI adjustments
 if latest_rsi < 40:
+    # more eager to buy, less greedy on sells
     buy_min *= 0.7
     buy_max *= 0.8
     sell_min *= 0.8
     sell_max *= 0.9
 elif latest_rsi > 60:
+    # more cautious buys, quicker profit-taking
     buy_min *= 1.1
     buy_max *= 1.2
     sell_min *= 0.9
@@ -144,22 +179,23 @@ elif latest_rsi > 60:
 
 # Trend adjustments
 if trend_up:
+    # Uptrend: buy shallower dips, accept smaller profit targets
     buy_min *= 0.9
     buy_max *= 0.9
     sell_min *= 0.9
     sell_max *= 0.95
 else:
+    # Not in clear uptrend: be pickier on buys, keep sells closer
     buy_min *= 1.1
     buy_max *= 1.2
     sell_min *= 0.9
     sell_max *= 0.95
 
-# Sanity
-buy_min = max(0.25, min(buy_min, buy_max - 0.1))
-sell_min = max(0.25, min(sell_min, sell_max - 0.1))
+# Sanity checks
+buy_min = max(0.5, min(buy_min, buy_max - 0.25))
+sell_min = max(0.5, min(sell_min, sell_max - 0.25))
 
-# Convert to price zones using LATEST close instead of previous close
-ref_price = latest_close  # Changed from prev_close to latest_close
+# Zones based on yesterday's close (ref_price)
 buy_zone_low_price = ref_price * (1 - buy_max / 100.0)
 buy_zone_high_price = ref_price * (1 - buy_min / 100.0)
 
@@ -169,38 +205,38 @@ sell_zone_high_price = ref_price * (1 + sell_max / 100.0)
 # -----------------------------
 # Display zones
 # -----------------------------
-st.subheader("Suggested Buy/Sell Zones for Today")
+st.subheader("Suggested Buy/Sell Zones for Today (Anchored to Yesterday's Close)")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### Buy Zone (Dip Below Latest Close)")
-    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
+    st.markdown("### Buy Zone (Dip Below Yesterday's Close)")
+    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
     st.write(
         f"**Dip range:** {buy_min:.2f}% to {buy_max:.2f}% below ref\n"
         f"**Price zone:** ${buy_zone_low_price:,.2f} – ${buy_zone_high_price:,.2f}"
     )
 
 with col2:
-    st.markdown("### Sell Zone (Pop Above Latest Close)")
-    st.write(f"**Reference (latest close):** ${ref_price:,.2f}")  # Updated text
+    st.markdown("### Sell Zone (Pop Above Yesterday's Close)")
+    st.write(f"**Reference (yesterday's close):** ${ref_price:,.2f}")
     st.write(
         f"**Pop range:** {sell_min:.2f}% to {sell_max:.2f}% above ref\n"
         f"**Price zone:** ${sell_zone_low_price:,.2f} – ${sell_zone_high_price:,.2f}"
     )
 
 st.info(
-    "This is a *framework* for thinking about UPRO entries/exits, not a signal generator. "
-    "It adjusts generic % dip/pop zones based on today's RSI and the SPY trend."
+    "Daily bars are reconstructed from 5-minute intraday data (regular-hours only), "
+    "so missing days in Yahoo's daily candles are avoided. "
+    "Zones always anchor to **yesterday's close** from this intraday-derived daily series."
 )
 
 # -----------------------------
 # Visuals
 # -----------------------------
-st.subheader("UPRO Price and RSI")
-price_rsi = upro[["Close", "RSI"]].copy()
-st.line_chart(price_rsi)
+st.subheader("UPRO Daily Close and RSI (from Intraday)")
+st.line_chart(upro[["Close", "RSI"]])
 
-st.subheader("SPY Trend vs Moving Average")
+st.subheader("SPY Daily Close and Trend MA (from Intraday)")
 spy_viz = spy[["Close", f"MA{trend_ma_len}"]].dropna().copy()
 st.line_chart(spy_viz)
