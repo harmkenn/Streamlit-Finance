@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 
-st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.5")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.6")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -66,6 +66,9 @@ with st.spinner("Loading TQQQ and QQQ data..."):
     tqqq = fetch_data("TQQQ", lookback_days)
     qqq = fetch_data("QQQ", lookback_days)
 
+st.write("RAW TQQQ DATA BEFORE ANY PROCESSING:")
+st.write(tqqq.tail(10))
+
 if tqqq.empty or qqq.empty:
     st.error("Could not load data for TQQQ/QQQ.")
     st.stop()
@@ -98,6 +101,10 @@ if tqqq.empty:
 # -----------------------------
 # Today's context
 # -----------------------------
+st.write("FINAL TQQQ DATA AFTER PROCESSING:")
+st.write(tqqq.tail(10))
+
+
 latest = tqqq.iloc[-1]
 prev = tqqq.iloc[-2]
 
