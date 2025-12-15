@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 
-st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.4")
+st.title("TQQQ Dabble Helper – Buy/Sell Zones for Today v4.5")
 
 st.write(
     "This tool is **not financial advice**. It shows how someone *might* "
@@ -84,12 +84,9 @@ tqqq["Volatility"] = tqqq["Return"].rolling(vol_lookback).std() * np.sqrt(252)
 qqq[f"MA{trend_ma_len}"] = qqq["Close"].rolling(trend_ma_len).mean()
 qqq["TrendUp"] = qqq["Close"] > qqq[f"MA{trend_ma_len}"]
 
-# Align latest dates
-common_index = tqqq.index.intersection(qqq.index)
-tqqq = tqqq.loc[common_index].copy()
-qqq = qqq.loc[common_index].copy()
-
-tqqq["QQQ_TrendUp"] = qqq["TrendUp"]
+# ✅ Merge QQQ trend into TQQQ WITHOUT shrinking TQQQ
+tqqq = tqqq.join(qqq["TrendUp"], how="left")
+tqqq["TrendUp"] = tqqq["TrendUp"].ffill()
 
 # Drop early NaNs
 tqqq = tqqq.dropna()
@@ -105,10 +102,10 @@ latest = tqqq.iloc[-1]
 prev = tqqq.iloc[-2]
 
 latest_close = float(latest["Close"])
-prev_close = float(prev["Close"])  # ✅ THIS IS NOW THE REFERENCE CLOSE
+prev_close = float(prev["Close"])  # ✅ yesterday's close
 latest_rsi = float(latest["RSI"])
 latest_vol = float(latest["Volatility"])
-trend_up = bool(latest["QQQ_TrendUp"])
+trend_up = bool(latest["TrendUp"])
 
 # ✅ Explicit reference close
 ref_price = prev_close
