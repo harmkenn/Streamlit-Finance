@@ -2,28 +2,45 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.title("TQQQ 5-Year Hybrid Trigger Strategy (7/14/21-Day Highs & Lows)")
+st.title("5-Year Hybrid Trigger Strategy (7/14/21-Day Highs & Lows)")
+st.subheader("Your Current Portfolio")
+# -----------------------------------------
+# Load 5 years of TQQQ data
+# -----------------------------------------
+# Get tickers from session state and split into a list
+col1,col2.col3 = st.columns(3)
+
+tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+
+# Ticker selector
+with col1:
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
+
+if ticker:
+    df = yf.download(ticker, period="5y", interval="1d", auto_adjust=True)
+else:
+    st.stop()
 
 # -----------------------------------------
 # User Portfolio Inputs
 # -----------------------------------------
-st.subheader("Your Current Portfolio")
 
-user_cash = st.number_input(
-    "Enter your current cash balance ($):",
-    min_value=0.0,
-    value=100000.0,
-    step=100.0,
-    format="%.2f"
+with col2:
+    user_cash = st.number_input(
+        "Enter your current cash balance ($):",
+        min_value=0.0,
+        value=100000.0,
+        step=100.0,
+        format="%.2f"
 )
-
-user_shares = st.number_input(
-    "Enter your current TQQQ share count:",
-    min_value=0.0,
-    value=2000.0,
-    step=1.0,
-    format="%.4f"
-)
+with col3:
+    user_shares = st.number_input(
+        f"Enter your current {ticker} share count:",
+        min_value=0.0,
+        value=2000.0,
+        step=1.0,
+        format="%.4f"
+    )
 
 # -----------------------------------------
 # Strategy parameters
@@ -50,11 +67,6 @@ trend_ma_period = st.sidebar.slider(
     max_value=200,
     value=50
 )
-
-# -----------------------------------------
-# Load 5 years of TQQQ data
-# -----------------------------------------
-df = yf.download("TQQQ", period="5y", interval="1d", auto_adjust=True)
 
 if df.empty:
     st.error("No data returned from Yahoo Finance.")
@@ -314,5 +326,5 @@ portfolio_df.set_index("Date", inplace=True)
 st.subheader("Portfolio Value Over Time")
 st.line_chart(portfolio_df)
 
-st.subheader("TQQQ Closing Price")
+st.subheader(f"{ticker} Closing Price")
 st.line_chart(df["Close"])
