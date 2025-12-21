@@ -2,14 +2,34 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-st.title("TQQQ 5-Year Strategy Comparison: Hybrid High/Low vs MA-Adjusted Drop/Spike")
+# ============================================================
+# Page title
+# ============================================================
+st.title("5-Year Hybrid Trigger Strategy (7/14/21-Day Highs & Lows, ATR-MA Channel)")
+st.subheader("Your Current Portfolio")
 
-initial_cash = 100000
+# ============================================================
+# Layout and ticker selection
+# ============================================================
+col1, col2, col3 = st.columns(3)
 
-# -----------------------------------------
-# Sidebar parameters
-# -----------------------------------------
-st.sidebar.header("Hybrid High/Low Strategy Parameters (Strategy 1)")
+# Get tickers from session state and split into a list
+tickers_list = [
+    t.strip().upper()
+    for t in st.session_state.get("tickers", "").split(",")
+    if t.strip()
+]
+
+with col1:
+    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
+
+if not ticker:
+    st.stop()
+
+# ============================================================
+# Sidebar strategy parameters
+# ============================================================
+st.sidebar.header("Strategy Parameters")
 
 buy_risk_pct = st.sidebar.slider(
     "Buy position size (% of portfolio per buy trigger)",
@@ -32,317 +52,325 @@ trend_ma_period = st.sidebar.slider(
     value=50
 )
 
-st.sidebar.markdown("---")
-st.sidebar.header("MA-Adjusted Drop/Spike Strategy Parameters (Strategy 2)")
-
-trade_amount = st.sidebar.number_input(
-    "Fixed trade size ($ per trade)",
-    min_value=1000,
-    max_value=50000,
-    value=10000,
-    step=1000
+atr_period = st.sidebar.slider(
+    "ATR period (days)",
+    min_value=5,
+    max_value=50,
+    value=14
 )
 
-drop_pct_5 = st.sidebar.slider("Buy Trigger Drop % (5% default)", 1, 20, 5) / 100
-spike_pct_5 = st.sidebar.slider("Sell Trigger Rise % (5% default)", 1, 20, 5) / 100
-drop_pct_10 = st.sidebar.slider("Buy Trigger Drop % (10% default)", 1, 30, 10) / 100
-spike_pct_10 = st.sidebar.slider("Sell Trigger Rise % (10% default)", 1, 30, 10) / 100
+# ============================================================
+# User portfolio inputs
+# ============================================================
+with col2:
+    user_cash = st.number_input(
+        "Enter your current cash balance ($):",
+        min_value=0.0,
+        value=100000.0,
+        step=100.0,
+        format="%.2f"
+    )
 
-ma_period_2 = st.sidebar.slider("MA Period (Drop/Spike Strategy)", 5, 50, 7)
+with col3:
+    user_shares = st.number_input(
+        f"Enter your current {ticker} share count:",
+        min_value=0.0,
+        value=2000.0,
+        step=1.0,
+        format="%.4f"
+    )
 
-st.write(f"""
-Comparing two strategies on **TQQQ** over the last **5 years**:
+# ============================================================
+# Data loading & indicator computation
+# ============================================================
+@st.cache_data(ttl=600)
+def load_data(ticker: str, period: str = "5y", interval: str = "1d") -> pd.DataFrame:
+    df = yf.download(ticker, period=period, interval=interval, auto_adjust=True)
+    return df
 
-**Strategy 1 – Hybrid High/Low with Trend Filter**
 
-- Start with **${initial_cash:,}** cash
-- Uses 6 triggers:
-  - A: Buy at 7-day low  
-  - B: Sell at 7-day high  
-  - C: Buy at 14-day low  
-  - D: Sell at 14-day high  
-  - E: Buy at 21-day low  
-  - F: Sell at 21-day high  
-- Buys only when price is above **MA{trend_ma_period}**
-- Each BUY uses **{buy_risk_pct*100:.1f}%** of portfolio (if cash allows)
-- Each SELL closes **{sell_risk_pct*100:.1f}%** of current position
-- No repeated BUYs until a SELL, and vice versa
+def compute_indicators(
+    df: pd.DataFrame,
+    ma_period: int,
+    atr_period: int
+) -> pd.DataFrame:
+    df = df.copy().astype(float)
 
-**Strategy 2 – MA-Adjusted 5% / 10% Drop/Spike**
+    # Rolling windows for triggers
+    df["Low7"] = df["Low"].rolling(7).min()
+    df["High7"] = df["High"].rolling(7).max()
+    df["Low14"] = df["Low"].rolling(14).min()
+    df["High14"] = df["High"].rolling(14).max()
+    df["Low21"] = df["Low"].rolling(21).min()
+    df["High21"] = df["High"].rolling(21).max()
 
-- Start with **${initial_cash:,}** cash
-- Trade size: **${trade_amount:,}** per trade
-- Raw triggers based on previous close:
-  - Buy at **-{drop_pct_5*100:.1f}%** and **-{drop_pct_10*100:.1f}%**
-  - Sell at **+{spike_pct_5*100:.1f}%** and **+{spike_pct_10*100:.1f}%**
-- Triggers adjusted by **MA{ma_period_2}**:
-  - Buy price = min(raw trigger, MA)
-  - Sell price = max(raw trigger, MA)
+    # Trend filter MA
+    df[f"MA{ma_period}"] = df["Close"].rolling(ma_period).mean()
 
-Both are compared to a **buy-and-hold** benchmark (all-in on day 1).
-""")
+    # ATR (Average True Range)
+    df["H-L"] = df["High"] - df["Low"]
+    df["H-PC"] = (df["High"] - df["Close"].shift(1)).abs()
+    df["L-PC"] = (df["Low"] - df["Close"].shift(1)).abs()
+    df["TR"] = df[["H-L", "H-PC", "L-PC"]].max(axis=1)
+    df["ATR"] = df["TR"].rolling(atr_period).mean()
 
-# -----------------------------------------
-# Load 5 years of TQQQ data
-# -----------------------------------------
-ticker = "TQQQ"
-df = yf.download(ticker, period="5y", interval="1d")
+    # Volatility-adjusted MA channel
+    df["UpperBand"] = df[f"MA{ma_period}"] + df["ATR"]
+    df["LowerBand"] = df[f"MA{ma_period}"] - df["ATR"]
+
+    # Clean up helper columns
+    df = df.drop(columns=["H-L", "H-PC", "L-PC", "TR"])
+
+    # Drop rows where indicators are not ready
+    df = df.dropna()
+
+    return df
+
+
+df = load_data(ticker)
 
 if df.empty:
-    st.error("Error: No data returned.")
+    st.error("No data returned from Yahoo Finance.")
     st.stop()
 
-df = df.astype(float)
+df = compute_indicators(df, trend_ma_period, atr_period)
 
-# For Strategy 1: rolling highs/lows and trend MA
-df["Low7"] = df["Low"].rolling(7).min()
-df["High7"] = df["High"].rolling(7).max()
-df["Low14"] = df["Low"].rolling(14).min()
-df["High14"] = df["High"].rolling(14).max()
-df["Low21"] = df["Low"].rolling(21).min()
-df["High21"] = df["High"].rolling(21).max()
-df[f"MA{trend_ma_period}"] = df["Close"].rolling(trend_ma_period).mean()
+# ============================================================
+# Strategy core
+# ============================================================
+def run_strategy(
+    df: pd.DataFrame,
+    start_cash: float,
+    start_shares: float,
+    buy_risk_pct: float,
+    sell_risk_pct: float
+):
+    cash = float(start_cash)
+    shares = float(start_shares)
+    last_action = None  # "BUY", "SELL", or None
 
-# For Strategy 2: previous close and its own MA
-df["PrevClose"] = df["Close"].shift(1)
-df[f"MA{ma_period_2}"] = df["Close"].rolling(ma_period_2).mean()
+    trades = []
+    portfolio = []
 
-df = df.dropna()
+    for idx, row in df.iterrows():
+        low = float(row["Low"])
+        high = float(row["High"])
+        close = float(row["Close"])
 
-# -----------------------------------------
-# Strategy 1: Hybrid High/Low with Trend Filter
-# -----------------------------------------
-cash1 = float(initial_cash)
-shares1 = 0.0
-last_action1 = None  # "BUY", "SELL", or None
+        low7 = float(row["Low7"])
+        high7 = float(row["High7"])
+        low14 = float(row["Low14"])
+        high14 = float(row["High14"])
+        low21 = float(row["Low21"])
+        high21 = float(row["High21"])
 
-trades1 = []
-portfolio1 = []
+        upper = float(row["UpperBand"])
+        lower = float(row["LowerBand"])
 
-for idx, row in df.iterrows():
-    low = float(row["Low"])
-    high = float(row["High"])
-    close = float(row["Close"])
+        portfolio_value = cash + shares * close
 
-    low7 = float(row["Low7"])
-    high7 = float(row["High7"])
-    low14 = float(row["Low14"])
-    high14 = float(row["High14"])
-    low21 = float(row["Low21"])
-    high21 = float(row["High21"])
-    trend_ma = float(row[f"MA{trend_ma_period}"])
+        # ====================================================
+        # BUY TRIGGERS (A, C, E)
+        # Only when price is BELOW the lower volatility band
+        # ====================================================
+        if last_action != "BUY" and close < lower:
+            buy_executed = False
 
-    portfolio_value = cash1 + shares1 * close
+            # A: 7-day low
+            if low <= low7 and cash > 0:
+                buy_amount = min(cash, buy_risk_pct * portfolio_value)
+                if buy_amount > 0:
+                    qty = buy_amount / low7
+                    cash -= buy_amount
+                    shares += qty
+                    buy_executed = True
+                    trades.append([idx, "BUY 7-day low", low7, qty, cash, shares])
 
-    # BUY TRIGGERS (A, C, E) - only if above trend MA
-    if last_action1 != "BUY" and close > trend_ma:
-        buy_executed = False
+            # C: 14-day low
+            if low <= low14 and cash > 0:
+                buy_amount = min(cash, buy_risk_pct * portfolio_value)
+                if buy_amount > 0:
+                    qty = buy_amount / low14
+                    cash -= buy_amount
+                    shares += qty
+                    buy_executed = True
+                    trades.append([idx, "BUY 14-day low", low14, qty, cash, shares])
 
-        # A: 7-day low
-        if low <= low7 and cash1 > 0:
-            portfolio_value = cash1 + shares1 * close
-            buy_amount = min(cash1, buy_risk_pct * portfolio_value)
-            if buy_amount > 0:
-                qty = buy_amount / low7
-                cash1 -= buy_amount
-                shares1 += qty
-                buy_executed = True
-                trades1.append([idx, "BUY 7-day low", low7, qty, cash1, shares1])
+            # E: 21-day low
+            if low <= low21 and cash > 0:
+                buy_amount = min(cash, buy_risk_pct * portfolio_value)
+                if buy_amount > 0:
+                    qty = buy_amount / low21
+                    cash -= buy_amount
+                    shares += qty
+                    buy_executed = True
+                    trades.append([idx, "BUY 21-day low", low21, qty, cash, shares])
 
-        # C: 14-day low
-        if low <= low14 and cash1 > 0:
-            portfolio_value = cash1 + shares1 * close
-            buy_amount = min(cash1, buy_risk_pct * portfolio_value)
-            if buy_amount > 0:
-                qty = buy_amount / low14
-                cash1 -= buy_amount
-                shares1 += qty
-                buy_executed = True
-                trades1.append([idx, "BUY 14-day low", low14, qty, cash1, shares1])
+            if buy_executed:
+                last_action = "BUY"
 
-        # E: 21-day low
-        if low <= low21 and cash1 > 0:
-            portfolio_value = cash1 + shares1 * close
-            buy_amount = min(cash1, buy_risk_pct * portfolio_value)
-            if buy_amount > 0:
-                qty = buy_amount / low21
-                cash1 -= buy_amount
-                shares1 += qty
-                buy_executed = True
-                trades1.append([idx, "BUY 21-day low", low21, qty, cash1, shares1])
+        # ====================================================
+        # SELL TRIGGERS (B, D, F)
+        # Only when price is ABOVE the upper volatility band
+        # ====================================================
+        if last_action != "SELL" and shares > 0 and close > upper:
+            sell_executed = False
 
-        if buy_executed:
-            last_action1 = "BUY"
+            # B: 7-day high
+            if high >= high7 and shares > 0:
+                sell_value = sell_risk_pct * (shares * close)
+                price = high7
+                qty = min(shares, sell_value / price)
+                if qty > 0:
+                    cash += qty * price
+                    shares -= qty
+                    sell_executed = True
+                    trades.append([idx, "SELL 7-day high", price, qty, cash, shares])
 
-    # SELL TRIGGERS (B, D, F)
-    if last_action1 != "SELL" and shares1 > 0:
-        sell_executed = False
+            # D: 14-day high
+            if high >= high14 and shares > 0:
+                sell_value = sell_risk_pct * (shares * close)
+                price = high14
+                qty = min(shares, sell_value / price)
+                if qty > 0:
+                    cash += qty * price
+                    shares -= qty
+                    sell_executed = True
+                    trades.append([idx, "SELL 14-day high", price, qty, cash, shares])
 
-        # B: 7-day high
-        if high >= high7 and shares1 > 0:
-            position_value = shares1 * close
-            sell_value = sell_risk_pct * position_value
-            price = high7
-            qty = min(shares1, sell_value / price)
-            if qty > 0:
-                cash1 += qty * price
-                shares1 -= qty
-                sell_executed = True
-                trades1.append([idx, "SELL 7-day high", price, qty, cash1, shares1])
+            # F: 21-day high
+            if high >= high21 and shares > 0:
+                sell_value = sell_risk_pct * (shares * close)
+                price = high21
+                qty = min(shares, sell_value / price)
+                if qty > 0:
+                    cash += qty * price
+                    shares -= qty
+                    sell_executed = True
+                    trades.append([idx, "SELL 21-day high", price, qty, cash, shares])
 
-        # D: 14-day high
-        if high >= high14 and shares1 > 0:
-            position_value = shares1 * close
-            sell_value = sell_risk_pct * position_value
-            price = high14
-            qty = min(shares1, sell_value / price)
-            if qty > 0:
-                cash1 += qty * price
-                shares1 -= qty
-                sell_executed = True
-                trades1.append([idx, "SELL 14-day high", price, qty, cash1, shares1])
+            if sell_executed:
+                last_action = "SELL"
 
-        # F: 21-day high
-        if high >= high21 and shares1 > 0:
-            position_value = shares1 * close
-            sell_value = sell_risk_pct * position_value
-            price = high21
-            qty = min(shares1, sell_value / price)
-            if qty > 0:
-                cash1 += qty * price
-                shares1 -= qty
-                sell_executed = True
-                trades1.append([idx, "SELL 21-day high", price, qty, cash1, shares1])
+        portfolio.append([idx, float(cash + shares * close)])
 
-        if sell_executed:
-            last_action1 = "SELL"
+    final_value = float(cash + shares * df["Close"].iloc[-1].item())
 
-    portfolio1.append([idx, float(cash1 + shares1 * close)])
+    results = {
+        "final_value": final_value,
+        "cash": cash,
+        "shares": shares,
+        "trades": trades,
+        "portfolio": portfolio,
+    }
+    return results
 
-final_value1 = float(cash1 + shares1 * df["Close"].iloc[-1])
 
-# -----------------------------------------
-# Strategy 2: MA-Adjusted Drop/Spike
-# -----------------------------------------
-cash2 = float(initial_cash)
-shares2 = 0.0
-trades2 = []
-portfolio2 = []
+# ============================================================
+# Helper: Next triggers display (using latest row)
+# ============================================================
+def show_next_triggers(df: pd.DataFrame):
+    latest = df.iloc[-1]
 
-for idx, row in df.iterrows():
-    prev_close = float(row["PrevClose"])
-    day_low = float(row["Low"])
-    day_high = float(row["High"])
-    day_close = float(row["Close"])
-    ma2 = float(row[f"MA{ma_period_2}"])
+    close = float(latest["Close"])
+    low7 = float(latest["Low7"])
+    high7 = float(latest["High7"])
+    low14 = float(latest["Low14"])
+    high14 = float(latest["High14"])
+    low21 = float(latest["Low21"])
+    high21 = float(latest["High21"])
+    ma_val = float(latest[f"MA{trend_ma_period}"])
+    upper = float(latest["UpperBand"])
+    lower = float(latest["LowerBand"])
 
-    # Raw triggers
-    buy_5 = prev_close * (1 - drop_pct_5)
-    sell_5 = prev_close * (1 + spike_pct_5)
-    buy_10 = prev_close * (1 - drop_pct_10)
-    sell_10 = prev_close * (1 + spike_pct_10)
+    portfolio_value = user_cash + user_shares * close
+    position_value = user_shares * close
 
-    # MA-adjusted trigger levels
-    buy_5_adj = min(buy_5, ma2)
-    sell_5_adj = max(sell_5, ma2)
-    buy_10_adj = min(buy_10, ma2)
-    sell_10_adj = max(sell_10, ma2)
+    buy_amount = buy_risk_pct * portfolio_value if portfolio_value > 0 else 0
+    sell_amount = sell_risk_pct * position_value if position_value > 0 else 0
 
-    # BUY 5% (if cash available)
-    if day_low <= buy_5_adj and cash2 >= trade_amount:
-        qty = trade_amount / buy_5_adj
-        cash2 -= trade_amount
-        shares2 += qty
-        total_value = cash2 + shares2 * buy_5_adj
-        trades2.append([idx, "BUY 5% (MA-adjusted)", buy_5_adj, qty, cash2, shares2, total_value])
+    st.subheader("Next Expected Triggers (Based on ATR-MA Channel)")
 
-    # SELL 5%
-    if day_high >= sell_5_adj and shares2 > 0:
-        qty = trade_amount / sell_5_adj
-        if shares2 >= qty:
-            cash2 += trade_amount
-            shares2 -= qty
-            total_value = cash2 + shares2 * sell_5_adj
-            trades2.append([idx, "SELL 5% (MA-adjusted)", sell_5_adj, qty, cash2, shares2, total_value])
+    with col1:
+        st.write(f"**Latest Close:** ${close:.2f}")
+        st.write(f"**MA ({trend_ma_period}):** ${ma_val:.2f}")
+        st.write(f"**Lower Band:** ${lower:.2f}")
+        st.write(f"**Upper Band:** ${upper:.2f}")
 
-    # BUY 10% (if cash available)
-    if day_low <= buy_10_adj and cash2 >= trade_amount:
-        qty = trade_amount / buy_10_adj
-        cash2 -= trade_amount
-        shares2 += qty
-        total_value = cash2 + shares2 * buy_10_adj
-        trades2.append([idx, "BUY 10% (MA-adjusted)", buy_10_adj, qty, cash2, shares2, total_value])
+    with col2:
+        st.write("**Potential BUY levels (if price < lower band):**")
+        st.write(f"- At 7-day low (${low7:.2f}): {buy_amount / low7:.4f} shares" if buy_amount > 0 else "- No buy capital")
+        st.write(f"- At 14-day low (${low14:.2f}): {buy_amount / low14:.4f} shares" if buy_amount > 0 else "")
+        st.write(f"- At 21-day low (${low21:.2f}): {buy_amount / low21:.4f} shares" if buy_amount > 0 else "")
 
-    # SELL 10%
-    if day_high >= sell_10_adj and shares2 > 0:
-        qty = trade_amount / sell_10_adj
-        if shares2 >= qty:
-            cash2 += trade_amount
-            shares2 -= qty
-            total_value = cash2 + shares2 * sell_10_adj
-            trades2.append([idx, "SELL 10% (MA-adjusted)", sell_10_adj, qty, cash2, shares2, total_value])
+    with col3:
+        st.write("**Potential SELL levels (if price > upper band):**")
+        if sell_amount > 0:
+            st.write(f"- At 7-day high (${high7:.2f}): {sell_amount / high7:.4f} shares")
+            st.write(f"- At 14-day high (${high14:.2f}): {sell_amount / high14:.4f} shares")
+            st.write(f"- At 21-day high (${high21:.2f}): {sell_amount / high21:.4f} shares")
+        else:
+            st.write("No shares to sell.")
 
-    portfolio2.append([idx, cash2 + shares2 * day_close])
 
-final_value2 = cash2 + shares2 * float(df["Close"].iloc[-1])
+show_next_triggers(df)
 
-# -----------------------------------------
-# Buy-and-hold benchmark
-# -----------------------------------------
+# ============================================================
+# Run strategy
+# ============================================================
+results = run_strategy(
+    df=df,
+    start_cash=user_cash,
+    start_shares=user_shares,
+    buy_risk_pct=buy_risk_pct,
+    sell_risk_pct=sell_risk_pct,
+)
+
+final_value = results["final_value"]
+trades = results["trades"]
+portfolio = results["portfolio"]
+
+# ============================================================
+# Buy-until-cash-is-gone benchmark
+# ============================================================
 first_price = float(df["Close"].iloc[0])
-bh_shares = initial_cash / first_price
-bh_series = df["Close"] * bh_shares
-final_value_bh = float(bh_series.iloc[-1])
+buy_hold_shares = user_cash / first_price
+buy_hold_value = buy_hold_shares * float(df["Close"].iloc[-1])
 
-# -----------------------------------------
+# ============================================================
 # Display results
-# -----------------------------------------
-st.subheader("Final Results (5-Year Backtest)")
+# ============================================================
+with col3:
+    st.subheader("Final Results")
+    st.write(f"**Hybrid Trigger Strategy Final Value:** ${final_value:,.2f}")
+    st.write(f"**Buy-Until-Cash-Is-Invested Final Value:** ${buy_hold_value:,.2f}")
 
-results_df = pd.DataFrame({
-    "Strategy": [
-        "Hybrid High/Low with Trend (Strategy 1)",
-        "MA-Adjusted Drop/Spike (Strategy 2)",
-        "Buy-and-Hold"
-    ],
-    "Final Value ($)": [
-        final_value1,
-        final_value2,
-        final_value_bh
-    ]
-})
-
-st.dataframe(results_df.style.format({"Final Value ($)": "${:,.2f}"}))
-
-# Trade logs
-st.subheader("Trade Log – Strategy 1 (Hybrid High/Low)")
-trades1_df = pd.DataFrame(
-    trades1,
-    columns=["Date", "Type", "Price", "Shares", "CashAfter", "SharesAfter"]
+# Trade log
+st.subheader("Trade Log")
+trades_df = pd.DataFrame(
+    trades,
+    columns=["Date", "Trigger", "Price", "Shares", "CashAfter", "SharesAfter"]
 )
-st.dataframe(trades1_df)
+st.dataframe(trades_df)
 
-st.subheader("Trade Log – Strategy 2 (MA-Adjusted Drop/Spike)")
-trades2_df = pd.DataFrame(
-    trades2,
-    columns=["Date", "Type", "Execution Price", "Shares", "CashAfter", "SharesAfter", "TotalValue"]
-)
-st.dataframe(trades2_df)
+# Portfolio curve
+portfolio_df = pd.DataFrame(portfolio, columns=["Date", "Value"])
+portfolio_df.set_index("Date", inplace=True)
 
-# Equity curves
-portfolio1_df = pd.DataFrame(portfolio1, columns=["Date", "Strategy1"])
-portfolio1_df.set_index("Date", inplace=True)
+st.subheader("Portfolio Value Over Time")
+st.line_chart(portfolio_df)
 
-portfolio2_df = pd.DataFrame(portfolio2, columns=["Date", "Strategy2"])
-portfolio2_df.set_index("Date", inplace=True)
+# ============================================================
+# Price chart with MA and ATR channel
+# ============================================================
+st.subheader(f"{ticker} Closing Price with MA & ATR Channel")
 
-equity_df = pd.DataFrame(index=df.index)
-equity_df["Strategy1"] = portfolio1_df["Strategy1"]
-equity_df["Strategy2"] = portfolio2_df["Strategy2"]
-equity_df["BuyAndHold"] = bh_series
+price_plot_df = df[[f"MA{trend_ma_period}", "UpperBand", "LowerBand", "Close"]].copy()
+price_plot_df.columns = [
+    f"MA{trend_ma_period}",
+    "UpperBand",
+    "LowerBand",
+    "Close",
+]
 
-st.subheader("Portfolio Value Over Time (All Strategies)")
-st.line_chart(equity_df)
-
-st.subheader("TQQQ Closing Price")
-st.line_chart(df["Close"])
+st.line_chart(price_plot_df)

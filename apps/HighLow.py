@@ -8,7 +8,7 @@ st.subheader("Your Current Portfolio")
 # Load 5 years of TQQQ data
 # -----------------------------------------
 # Get tickers from session state and split into a list
-col1,col2.col3 = st.columns(3)
+col1,col2,col3 = st.columns(3)
 
 tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 
@@ -118,13 +118,6 @@ def show_next_triggers():
     latest_ma = df[f"MA{trend_ma_period}"].iloc[-1].item()
     trend_ok = latest_close > latest_ma
 
-    st.subheader("Next Expected Triggers")
-
-    # -----------------------------------------
-    # Compute next BUY/SELL share quantities
-    # -----------------------------------------
-    st.subheader("Next Trade Size (Shares & Dollars)")
-
     latest = df.iloc[-1]
 
     close = latest["Close"].item()
@@ -162,28 +155,28 @@ def show_next_triggers():
             st.write("❌ Trend filter blocks buys (price below MA)")
 
     else:
-        st.write("**Next allowed action: BUY or SELL**")
-        st.write("BUY triggers:")
-        if close > trend_ma:
-            st.write(f"- BUY at 7-day low (${low7:.2f}): {buy_amount/low7:.4f} shares")
-            st.write(f"- BUY at 14-day low (${low14:.2f}): {buy_amount/low14:.4f} shares")
-            st.write(f"- BUY at 21-day low (${low21:.2f}): {buy_amount/low21:.4f} shares")
-        else:
-            st.write("❌ Trend filter blocks buys (price below MA)")
-
-        st.write("SELL triggers:")
-        st.write(f"- SELL at 7-day high (${high7:.2f}): {sell_amount/high7:.4f} shares")
-        st.write(f"- SELL at 14-day high (${high14:.2f}): {sell_amount/high14:.4f} shares")
-        st.write(f"- SELL at 21-day high (${high21:.2f}): {sell_amount/high21:.4f} shares")
-
-
-    st.write(f"**Next allowed action:** {next_action}")
-
-    if next_action.startswith("BUY"):
-        st.write(
-            f"**Trend filter:** "
-            f"{'✅ Above MA — buys allowed' if trend_ok else '❌ Below MA — buys blocked'}"
-        )
+        
+        with col1:
+            st.write("**Next allowed action: BUY or SELL**")
+            st.write("BUY triggers:")
+            if close > trend_ma:
+                
+                st.write(f"- BUY at 7-day low (${low7:.2f}): {buy_amount/low7:.4f} shares")
+                st.write(f"- BUY at 14-day low (${low14:.2f}): {buy_amount/low14:.4f} shares")
+                st.write(f"- BUY at 21-day low (${low21:.2f}): {buy_amount/low21:.4f} shares")
+            else:
+                st.write("❌ Trend filter blocks buys (price below MA)")
+        with col2:
+            st.write("SELL triggers:")
+            st.write(f"- SELL at 7-day high (${high7:.2f}): {sell_amount/high7:.4f} shares")
+            st.write(f"- SELL at 14-day high (${high14:.2f}): {sell_amount/high14:.4f} shares")
+            st.write(f"- SELL at 21-day high (${high21:.2f}): {sell_amount/high21:.4f} shares")
+    with col1:
+        if next_action.startswith("BUY"):
+            st.write(
+                f"**Trend filter:** "
+                f"{'✅ Above MA — buys allowed' if trend_ok else '❌ Below MA — buys blocked'}"
+            )
 
 show_next_triggers()
 
@@ -307,9 +300,10 @@ buy_hold_value = buy_hold_shares * df["Close"].iloc[-1].item()
 # -----------------------------------------
 # Display results
 # -----------------------------------------
-st.subheader("Final Results")
-st.write(f"**Hybrid Trigger Strategy Final Value:** ${final_value:,.2f}")
-st.write(f"**Buy-Until-Cash-Is-Invested Final Value:** ${buy_hold_value:,.2f}")
+with col3:
+    st.subheader("Final Results")
+    st.write(f"**Hybrid Trigger Strategy Final Value:** ${final_value:,.2f}")
+    st.write(f"**Buy-Until-Cash-Is-Invested Final Value:** ${buy_hold_value:,.2f}")
 
 # Trade log
 st.subheader("Trade Log")
