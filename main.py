@@ -18,12 +18,7 @@ sub_app_names = {
     'Predict.py': 'Predict',
     'HighLow.py': 'High Low Strategy',
     'HighLowCompare.py': 'High Low MA Strategy',
-    'TQQQpriceLHC.py': 'TQQQ',
-    'UPRO.py': 'UPRO',
-    'UDOW.py': 'UDOW',
-    'TQQQwithRSI.py': 'TQQQ with RSI',
-    'UPROwithRSI.py': 'UPRO with RSI',
-    'UDOWwithRSI.py': 'UDOW with RSI'
+    'TQQQpriceLHC.py': 'TQQQ'
 }
 
 # Get a list of .py files from the SubApps folder
