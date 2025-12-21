@@ -54,7 +54,7 @@ trend_ma_period = st.sidebar.slider(
 # -----------------------------------------
 # Load 5 years of TQQQ data
 # -----------------------------------------
-df = yf.download("TQQQ", period="5y", interval="1d")
+df = yf.download("TQQQ", period="5y", interval="1d", auto_adjust=True)
 
 if df.empty:
     st.error("No data returned from Yahoo Finance.")
@@ -102,8 +102,8 @@ def show_next_triggers():
             "B: 7-day high", "D: 14-day high", "F: 21-day high"
         ]
 
-    latest_close = float(df["Close"].iloc[-1])
-    latest_ma = float(df[f"MA{trend_ma_period}"].iloc[-1])
+    latest_close = df["Close"].iloc[-1].item()
+    latest_ma = df[f"MA{trend_ma_period}"].iloc[-1].item()
     trend_ok = latest_close > latest_ma
 
     st.subheader("Next Expected Triggers")
@@ -115,14 +115,15 @@ def show_next_triggers():
 
     latest = df.iloc[-1]
 
-    close = float(latest["Close"])
-    low7 = float(latest["Low7"])
-    high7 = float(latest["High7"])
-    low14 = float(latest["Low14"])
-    high14 = float(latest["High14"])
-    low21 = float(latest["Low21"])
-    high21 = float(latest["High21"])
-    trend_ma = float(latest[f"MA{trend_ma_period}"])
+    close = latest["Close"].item()
+    low7 = latest["Low7"].item()
+    high7 = latest["High7"].item()
+    low14 = latest["Low14"].item()
+    high14 = latest["High14"].item()
+    low21 = latest["Low21"].item()
+    high21 = latest["High21"].item()
+    trend_ma = latest[f"MA{trend_ma_period}"].item()
+
 
     portfolio_value = user_cash + user_shares * close
     position_value = user_shares * close
@@ -178,17 +179,17 @@ show_next_triggers()
 # Run hybrid strategy
 # -----------------------------------------
 for idx, row in df.iterrows():
-    low = float(row["Low"])
-    high = float(row["High"])
-    close = float(row["Close"])
+    low = row["Low"].item()
+    high = row["High"].item()
+    close = row["Close"].item()
 
-    low7 = float(row["Low7"])
-    high7 = float(row["High7"])
-    low14 = float(row["Low14"])
-    high14 = float(row["High14"])
-    low21 = float(row["Low21"])
-    high21 = float(row["High21"])
-    trend_ma = float(row[f"MA{trend_ma_period}"])
+    low7 = row["Low7"].item()
+    high7 = row["High7"].item()
+    low14 = row["Low14"].item()
+    high14 = row["High14"].item()
+    low21 = row["Low21"].item()
+    high21 = row["High21"].item()
+    trend_ma = row[f"MA{trend_ma_period}"].item()
 
     portfolio_value = cash + shares * close
 
@@ -282,14 +283,14 @@ for idx, row in df.iterrows():
     portfolio.append([idx, float(cash + shares * close)])
 
 # Final strategy value
-final_value = float(cash + shares * df["Close"].iloc[-1])
+final_value = cash + shares * df["Close"].iloc[-1].item()
 
 # -----------------------------------------
 # Buy-until-cash-is-gone benchmark
 # -----------------------------------------
-first_price = float(df["Close"].iloc[0])
+first_price = df["Close"].iloc[0].item()
 buy_hold_shares = user_cash / first_price
-buy_hold_value = float(buy_hold_shares * df["Close"].iloc[-1])
+buy_hold_value = buy_hold_shares * df["Close"].iloc[-1].item()
 
 # -----------------------------------------
 # Display results
