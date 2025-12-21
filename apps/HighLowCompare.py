@@ -374,3 +374,65 @@ price_plot_df.columns = [
 ]
 
 st.line_chart(price_plot_df)
+
+with st.expander("📘 Strategy Explanation (ATR‑MA Hybrid Trigger System)"):
+    st.markdown("""
+### ✅ Concise Explanation of the Strategy
+
+This strategy trades a single ticker using a mix of **trend awareness**, **volatility filtering**, and **breakout/pullback triggers**. It looks back over the last 5 years of daily data and reacts only when price makes meaningful moves.
+
+---
+
+### **1. ATR‑MA Channel Defines “Extreme” Prices**
+- A moving average (MA) shows the long‑term trend.  
+- ATR measures volatility.  
+- Together they form a channel:
+  - **UpperBand = MA + ATR**  
+  - **LowerBand = MA – ATR**
+
+Price above the upper band = unusually strong.  
+Price below the lower band = unusually weak.
+
+This filters out noise and avoids false signals.
+
+---
+
+### **2. Buy on Deep Pullbacks**
+A buy is allowed only when:
+
+- Price is **below the lower band** (oversold relative to trend)  
+- AND price hits a **7‑day, 14‑day, or 21‑day low**
+
+This means the strategy buys only when the market is stretched downward in a meaningful way.
+
+---
+
+### **3. Sell on Strong Rallies**
+A sell is allowed only when:
+
+- Price is **above the upper band** (overextended upward)  
+- AND price hits a **7‑day, 14‑day, or 21‑day high**
+
+This means the strategy sells only when the market is stretched upward in a meaningful way.
+
+---
+
+### **4. Position Sizing Controls Risk**
+- Each buy uses a fixed percentage of total portfolio value.  
+- Each sell closes a fixed percentage of the current position.
+
+This prevents all‑in/all‑out behavior and smooths the equity curve.
+
+---
+
+### **5. A State Machine Prevents Whipsaws**
+After a buy, the next action must be a sell.  
+After a sell, the next action must be a buy.
+
+This avoids rapid back‑and‑forth trading.
+
+---
+
+### ✅ **In one sentence**
+**It’s a volatility‑aware trend strategy that buys deep pullbacks and sells strong rallies, using 7/14/21‑day highs and lows as triggers and an ATR‑MA channel to filter out noise.**
+""")
