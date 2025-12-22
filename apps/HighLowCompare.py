@@ -68,21 +68,21 @@ buy_mult_7 = st.sidebar.slider(
     "Buy 7-day trigger multiplier",
     min_value=0.1,
     max_value=3.0,
-    value=0.5,
+    value=1.0,
     step=0.1
 )
 buy_mult_21 = st.sidebar.slider(
     "Buy 21-day trigger multiplier",
     min_value=0.1,
     max_value=3.0,
-    value=1.0,
+    value=1.2,
     step=0.1
 )
 buy_mult_63 = st.sidebar.slider(
     "Buy 63-day trigger multiplier",
     min_value=0.1,
     max_value=3.0,
-    value=1.5,
+    value=1.4,
     step=0.1
 )
 
