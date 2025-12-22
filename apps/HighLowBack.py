@@ -5,7 +5,7 @@ import yfinance as yf
 # ============================================================
 # Page title
 # ============================================================
-st.title("5-Year Hybrid Trigger Strategy (7/14/21-Day Highs & Lows, ATR-MA Channel)")
+st.title("5-Year Hybrid Trigger Strategy (7/14/63-Day Highs & Lows, ATR-MA Channel)")
 st.subheader("Your Current Portfolio")
 
 # ============================================================
@@ -101,8 +101,8 @@ def compute_indicators(
     df["High7"] = df["High"].rolling(7).max()
     df["Low14"] = df["Low"].rolling(14).min()
     df["High14"] = df["High"].rolling(14).max()
-    df["Low21"] = df["Low"].rolling(21).min()
-    df["High21"] = df["High"].rolling(21).max()
+    df["Low63"] = df["Low"].rolling(63).min()
+    df["High63"] = df["High"].rolling(63).max()
 
     # Trend filter MA
     df[f"MA{ma_period}"] = df["Close"].rolling(ma_period).mean()
@@ -161,8 +161,8 @@ def run_strategy(
         high7 = float(row["High7"])
         low14 = float(row["Low14"])
         high14 = float(row["High14"])
-        low21 = float(row["Low21"])
-        high21 = float(row["High21"])
+        low63 = float(row["Low63"])
+        high63 = float(row["High63"])
 
         upper = float(row["UpperBand"])
         lower = float(row["LowerBand"])
@@ -196,15 +196,15 @@ def run_strategy(
                     buy_executed = True
                     trades.append([idx, "BUY 14-day low", low14, qty, cash, shares])
 
-            # E: 21-day low
-            if low <= low21 and cash > 0:
+            # E: 63-day low
+            if low <= low63 and cash > 0:
                 buy_amount = min(cash, buy_risk_pct * portfolio_value)
                 if buy_amount > 0:
-                    qty = buy_amount / low21
+                    qty = buy_amount / low63
                     cash -= buy_amount
                     shares += qty
                     buy_executed = True
-                    trades.append([idx, "BUY 21-day low", low21, qty, cash, shares])
+                    trades.append([idx, "BUY 63-day low", low63, qty, cash, shares])
 
             if buy_executed:
                 last_action = "BUY"
@@ -238,16 +238,16 @@ def run_strategy(
                     sell_executed = True
                     trades.append([idx, "SELL 14-day high", price, qty, cash, shares])
 
-            # F: 21-day high
-            if high >= high21 and shares > 0:
+            # F: 63-day high
+            if high >= high63 and shares > 0:
                 sell_value = sell_risk_pct * (shares * close)
-                price = high21
+                price = high63
                 qty = min(shares, sell_value / price)
                 if qty > 0:
                     cash += qty * price
                     shares -= qty
                     sell_executed = True
-                    trades.append([idx, "SELL 21-day high", price, qty, cash, shares])
+                    trades.append([idx, "SELL 63-day high", price, qty, cash, shares])
 
             if sell_executed:
                 last_action = "SELL"
@@ -277,8 +277,8 @@ def show_next_triggers(df: pd.DataFrame):
     high7 = float(latest["High7"])
     low14 = float(latest["Low14"])
     high14 = float(latest["High14"])
-    low21 = float(latest["Low21"])
-    high21 = float(latest["High21"])
+    low63 = float(latest["Low63"])
+    high63 = float(latest["High63"])
     ma_val = float(latest[f"MA{trend_ma_period}"])
     upper = float(latest["UpperBand"])
     lower = float(latest["LowerBand"])
@@ -301,14 +301,14 @@ def show_next_triggers(df: pd.DataFrame):
         st.write("**Potential BUY levels (if price < lower band):**")
         st.write(f"- At 7-day low (${low7:.2f}): {buy_amount / low7:.4f} shares" if buy_amount > 0 else "- No buy capital")
         st.write(f"- At 14-day low (${low14:.2f}): {buy_amount / low14:.4f} shares" if buy_amount > 0 else "")
-        st.write(f"- At 21-day low (${low21:.2f}): {buy_amount / low21:.4f} shares" if buy_amount > 0 else "")
+        st.write(f"- At 63-day low (${low63:.2f}): {buy_amount / low63:.4f} shares" if buy_amount > 0 else "")
 
     with col3:
         st.write("**Potential SELL levels (if price > upper band):**")
         if sell_amount > 0:
             st.write(f"- At 7-day high (${high7:.2f}): {sell_amount / high7:.4f} shares")
             st.write(f"- At 14-day high (${high14:.2f}): {sell_amount / high14:.4f} shares")
-            st.write(f"- At 21-day high (${high21:.2f}): {sell_amount / high21:.4f} shares")
+            st.write(f"- At 63-day high (${high63:.2f}): {sell_amount / high63:.4f} shares")
         else:
             st.write("No shares to sell.")
 
@@ -401,7 +401,7 @@ This filters out noise and avoids false signals.
 A buy is allowed only when:
 
 - Price is **below the lower band** (oversold relative to trend)  
-- AND price hits a **7‑day, 14‑day, or 21‑day low**
+- AND price hits a **7‑day, 14‑day, or 63‑day low**
 
 This means the strategy buys only when the market is stretched downward in a meaningful way.
 
@@ -411,7 +411,7 @@ This means the strategy buys only when the market is stretched downward in a mea
 A sell is allowed only when:
 
 - Price is **above the upper band** (overextended upward)  
-- AND price hits a **7‑day, 14‑day, or 21‑day high**
+- AND price hits a **7‑day, 14‑day, or 63‑day high**
 
 This means the strategy sells only when the market is stretched upward in a meaningful way.
 
@@ -434,5 +434,5 @@ This avoids rapid back‑and‑forth trading.
 ---
 
 ### ✅ **In one sentence**
-**It’s a volatility‑aware trend strategy that buys deep pullbacks and sells strong rallies, using 7/14/21‑day highs and lows as triggers and an ATR‑MA channel to filter out noise.**
+**It’s a volatility‑aware trend strategy that buys deep pullbacks and sells strong rallies, using 7/14/63‑day highs and lows as triggers and an ATR‑MA channel to filter out noise.**
 """)
