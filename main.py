@@ -18,6 +18,7 @@ sub_app_names = {
     'Predict.py': 'Predict',
     'HighLow.py': 'High Low Strategy',
     'HighLowCompare.py': 'High Low MA Strategy',
+    'HighLowBack.py': 'High Low Back Strategy',
     'TQQQpriceLHC.py': 'TQQQ'
 }
 
