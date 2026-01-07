@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-# v 1.4
+# v 1.0
 st.set_page_config(page_title="TQQQ Trading Analyzer", layout="wide")
 
 st.title("🎯 TQQQ Buy/Sell Target Price Analyzer")
