@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 from datetime import datetime, timedelta
-
+#v1.1
 st.set_page_config(page_title="TQQQ Trading Analyzer", layout="wide")
 
 st.title("🎯 TQQQ Buy/Sell Target Price Analyzer")
@@ -90,6 +90,34 @@ def backtest_strategy(df):
     
     return pd.DataFrame(trades)
 
+# Portfolio simulation
+def simulate_portfolio(df, initial_capital=100000):
+    cash = initial_capital
+    shares = 0
+    portfolio_value = []
+    
+    for i in range(len(df)):
+        # Calculate current portfolio value
+        current_value = cash + (shares * df['Close'].iloc[i])
+        portfolio_value.append({
+            'Date': df.index[i],
+            'Value': current_value,
+            'Cash': cash,
+            'Shares': shares,
+            'Price': df['Close'].iloc[i]
+        })
+        
+        # Execute trades
+        if df['Signal'].iloc[i] == 1 and shares == 0:  # Buy signal
+            shares = cash / df['Close'].iloc[i]
+            cash = 0
+        elif df['Signal'].iloc[i] == -1 and shares > 0:  # Sell signal
+            cash = shares * df['Close'].iloc[i]
+            shares = 0
+    
+    portfolio_df = pd.DataFrame(portfolio_value)
+    return portfolio_df, cash, shares
+
 # Main app
 try:
     with st.spinner("Fetching TQQQ data..."):
@@ -172,6 +200,76 @@ try:
                 }))
         else:
             st.warning("No completed trades found in backtest period. Try adjusting parameters.")
+        
+        # Portfolio simulation
+        st.subheader("💰 Portfolio Simulation - 5 Year Performance")
+        
+        # Fetch 5 year data for simulation
+        data_5yr = fetch_data(60)  # 60 months = 5 years
+        data_5yr = calculate_indicators(data_5yr)
+        data_5yr = generate_signals(data_5yr, rsi_oversold, rsi_overbought)
+        
+        initial_capital = 100000
+        portfolio_df, final_cash, final_shares = simulate_portfolio(data_5yr, initial_capital)
+        
+        # Calculate final values
+        final_price = data_5yr['Close'].iloc[-1]
+        final_portfolio_value = final_cash + (final_shares * final_price)
+        total_return = ((final_portfolio_value - initial_capital) / initial_capital) * 100
+        years = len(data_5yr) / 252  # Trading days in a year
+        annualized_return = ((final_portfolio_value / initial_capital) ** (1 / years) - 1) * 100
+        
+        # Buy and hold comparison
+        buy_hold_shares = initial_capital / data_5yr['Close'].iloc[0]
+        buy_hold_value = buy_hold_shares * final_price
+        buy_hold_return = ((buy_hold_value - initial_capital) / initial_capital) * 100
+        
+        st.markdown(f"**Starting Capital:** ${initial_capital:,.0f} invested on {data_5yr.index[0].strftime('%Y-%m-%d')}")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Final Value", f"${final_portfolio_value:,.0f}", 
+                     delta=f"${final_portfolio_value - initial_capital:,.0f}")
+        with col2:
+            st.metric("Total Return", f"{total_return:.1f}%")
+        with col3:
+            st.metric("Annualized Return", f"{annualized_return:.1f}%")
+        with col4:
+            outperformance = total_return - buy_hold_return
+            st.metric("vs Buy & Hold", f"{outperformance:+.1f}%",
+                     delta=f"${final_portfolio_value - buy_hold_value:,.0f}")
+        
+        # Portfolio value chart
+        st.subheader("📊 Portfolio Value Over Time")
+        portfolio_chart = portfolio_df.set_index('Date')[['Value']]
+        
+        # Add buy and hold line for comparison
+        buy_hold_line = pd.DataFrame({
+            'Date': data_5yr.index,
+            'Buy & Hold': buy_hold_shares * data_5yr['Close']
+        }).set_index('Date')
+        
+        comparison_df = pd.concat([portfolio_chart, buy_hold_line], axis=1)
+        st.line_chart(comparison_df)
+        
+        st.caption(f"🟦 Strategy Portfolio | 🟧 Buy & Hold Comparison")
+        
+        # Summary comparison
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success(f"""
+            **Strategy Results:**
+            - Final Value: ${final_portfolio_value:,.0f}
+            - Return: {total_return:.1f}%
+            - Current: {f'${final_cash:,.0f} cash' if final_shares == 0 else f'{final_shares:.2f} shares @ ${final_price:.2f}'}
+            """)
+        with col2:
+            st.info(f"""
+            **Buy & Hold Results:**
+            - Final Value: ${buy_hold_value:,.0f}
+            - Return: {buy_hold_return:.1f}%
+            - Position: {buy_hold_shares:.2f} shares held
+            """)
             
 except Exception as e:
     st.error(f"Error: {str(e)}")
