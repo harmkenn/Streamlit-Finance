@@ -1,324 +1,185 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import numpy as np
+from datetime import datetime, timedelta
 
-st.title("5-Year Hybrid Trigger Strategy (7/14/21-Day Highs & Lows)")
-st.subheader("Your Current Portfolio")
-# -----------------------------------------
-# Load 5 years of TQQQ data
-# -----------------------------------------
-# Get tickers from session state and split into a list
-col1,col2,col3 = st.columns(3)
+st.set_page_config(page_title="TQQQ Trading Analyzer", layout="wide")
 
-tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+st.title("🎯 TQQQ Buy/Sell Target Price Analyzer")
+st.caption("⚠️ For educational purposes only. Not financial advice.")
 
-# Ticker selector
-with col1:
-    ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
-
-if ticker:
-    df = yf.download(ticker, period="5y", interval="1d", auto_adjust=True)
-else:
-    st.stop()
-
-# -----------------------------------------
-# User Portfolio Inputs
-# -----------------------------------------
-
-with col2:
-    user_cash = st.number_input(
-        "Enter your current cash balance ($):",
-        min_value=0.0,
-        value=100000.0,
-        step=100.0,
-        format="%.2f"
-)
-with col3:
-    user_shares = st.number_input(
-        f"Enter your current {ticker} share count:",
-        min_value=0.0,
-        value=2000.0,
-        step=1.0,
-        format="%.4f"
-    )
-
-# -----------------------------------------
-# Strategy parameters
-# -----------------------------------------
+# Sidebar parameters
 st.sidebar.header("Strategy Parameters")
+lookback_period = st.sidebar.slider("Analysis Period (months)", 6, 36, 12)
+rsi_oversold = st.sidebar.slider("RSI Oversold (Buy Signal)", 20, 40, 30)
+rsi_overbought = st.sidebar.slider("RSI Overbought (Sell Signal)", 60, 80, 70)
+ma_short = st.sidebar.slider("Short Moving Average (days)", 5, 20, 10)
+ma_long = st.sidebar.slider("Long Moving Average (days)", 20, 60, 30)
 
-buy_risk_pct = st.sidebar.slider(
-    "Buy position size (% of portfolio per buy trigger)",
-    min_value=1,
-    max_value=25,
-    value=10
-) / 100.0
+# Fetch TQQQ data
+@st.cache_data(ttl=3600)
+def fetch_data(months):
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=months*30)
+    ticker = yf.Ticker("TQQQ")
+    data = ticker.history(start=start_date, end=end_date)
+    return data
 
-sell_risk_pct = st.sidebar.slider(
-    "Sell position size (% of position per sell trigger)",
-    min_value=1,
-    max_value=50,
-    value=10
-) / 100.0
+# Calculate technical indicators
+def calculate_indicators(df):
+    # RSI
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # Moving Averages
+    df['MA_Short'] = df['Close'].rolling(window=ma_short).mean()
+    df['MA_Long'] = df['Close'].rolling(window=ma_long).mean()
+    
+    # Bollinger Bands
+    df['BB_Middle'] = df['Close'].rolling(window=20).mean()
+    bb_std = df['Close'].rolling(window=20).std()
+    df['BB_Upper'] = df['BB_Middle'] + (bb_std * 2)
+    df['BB_Lower'] = df['BB_Middle'] - (bb_std * 2)
+    
+    return df
 
-trend_ma_period = st.sidebar.slider(
-    "Trend filter MA period (days)",
-    min_value=20,
-    max_value=200,
-    value=50
-)
+# Generate signals
+def generate_signals(df, rsi_low, rsi_high):
+    df['Signal'] = 0
+    
+    # Buy signals: RSI oversold AND price near lower Bollinger Band
+    buy_condition = (df['RSI'] < rsi_low) & (df['Close'] < df['BB_Lower'] * 1.02)
+    df.loc[buy_condition, 'Signal'] = 1
+    
+    # Sell signals: RSI overbought AND price near upper Bollinger Band
+    sell_condition = (df['RSI'] > rsi_high) & (df['Close'] > df['BB_Upper'] * 0.98)
+    df.loc[sell_condition, 'Signal'] = -1
+    
+    return df
 
-if df.empty:
-    st.error("No data returned from Yahoo Finance.")
-    st.stop()
+# Backtest strategy
+def backtest_strategy(df):
+    position = 0
+    trades = []
+    entry_price = 0
+    
+    for i in range(len(df)):
+        if df['Signal'].iloc[i] == 1 and position == 0:  # Buy signal
+            position = 1
+            entry_price = df['Close'].iloc[i]
+            trades.append({
+                'Date': df.index[i],
+                'Type': 'BUY',
+                'Price': entry_price,
+                'Return': 0
+            })
+        elif df['Signal'].iloc[i] == -1 and position == 1:  # Sell signal
+            position = 0
+            exit_price = df['Close'].iloc[i]
+            ret = ((exit_price - entry_price) / entry_price) * 100
+            trades.append({
+                'Date': df.index[i],
+                'Type': 'SELL',
+                'Price': exit_price,
+                'Return': ret
+            })
+    
+    return pd.DataFrame(trades)
 
-df = df.astype(float)
-
-# Rolling windows for triggers
-df["Low7"] = df["Low"].rolling(7).min()
-df["High7"] = df["High"].rolling(7).max()
-df["Low14"] = df["Low"].rolling(14).min()
-df["High14"] = df["High"].rolling(14).max()
-df["Low21"] = df["Low"].rolling(21).min()
-df["High21"] = df["High"].rolling(21).max()
-
-# Trend filter MA
-df[f"MA{trend_ma_period}"] = df["Close"].rolling(trend_ma_period).mean()
-
-df = df.dropna()
-
-# -----------------------------------------
-# Strategy state
-# -----------------------------------------
-cash = float(user_cash)
-shares = float(user_shares)
-last_action = None  # "BUY", "SELL", or None
-
-trades = []
-portfolio = []
-
-# -----------------------------------------
-# Helper: Display next expected triggers
-# -----------------------------------------
-def show_next_triggers():
-    if last_action == "BUY":
-        next_action = "SELL"
-        next_triggers = ["B: 7-day high", "D: 14-day high", "F: 21-day high"]
-    elif last_action == "SELL":
-        next_action = "BUY"
-        next_triggers = ["A: 7-day low", "C: 14-day low", "E: 21-day low"]
+# Main app
+try:
+    with st.spinner("Fetching TQQQ data..."):
+        data = fetch_data(lookback_period)
+    
+    if data.empty:
+        st.error("Unable to fetch data. Please try again.")
     else:
-        next_action = "BUY or SELL"
-        next_triggers = [
-            "A: 7-day low", "C: 14-day low", "E: 21-day low",
-            "B: 7-day high", "D: 14-day high", "F: 21-day high"
-        ]
-
-    latest_close = df["Close"].iloc[-1].item()
-    latest_ma = df[f"MA{trend_ma_period}"].iloc[-1].item()
-    trend_ok = latest_close > latest_ma
-
-    latest = df.iloc[-1]
-
-    close = latest["Close"].item()
-    low7 = latest["Low7"].item()
-    high7 = latest["High7"].item()
-    low14 = latest["Low14"].item()
-    high14 = latest["High14"].item()
-    low21 = latest["Low21"].item()
-    high21 = latest["High21"].item()
-    trend_ma = latest[f"MA{trend_ma_period}"].item()
-
-
-    portfolio_value = user_cash + user_shares * close
-    position_value = user_shares * close
-
-    # BUY amounts
-    buy_amount = buy_risk_pct * portfolio_value if portfolio_value > 0 else 0
-
-    # SELL amounts
-    sell_amount = sell_risk_pct * position_value if position_value > 0 else 0
-
-    if last_action == "BUY":
-        st.write("**Next allowed action: SELL**")
-        st.write(f"- SELL at 7-day high (${high7:.2f}): {sell_amount/high7:.4f} shares")
-        st.write(f"- SELL at 14-day high (${high14:.2f}): {sell_amount/high14:.4f} shares")
-        st.write(f"- SELL at 21-day high (${high21:.2f}): {sell_amount/high21:.4f} shares")
-
-    elif last_action == "SELL":
-        st.write("**Next allowed action: BUY**")
-        if close > trend_ma:
-            st.write(f"- BUY at 7-day low (${low7:.2f}): {buy_amount/low7:.4f} shares")
-            st.write(f"- BUY at 14-day low (${low14:.2f}): {buy_amount/low14:.4f} shares")
-            st.write(f"- BUY at 21-day low (${low21:.2f}): {buy_amount/low21:.4f} shares")
-        else:
-            st.write("❌ Trend filter blocks buys (price below MA)")
-
-    else:
+        # Calculate indicators
+        data = calculate_indicators(data)
+        data = generate_signals(data, rsi_oversold, rsi_overbought)
         
+        # Current metrics
+        current_price = data['Close'].iloc[-1]
+        current_rsi = data['RSI'].iloc[-1]
+        current_bb_lower = data['BB_Lower'].iloc[-1]
+        current_bb_upper = data['BB_Upper'].iloc[-1]
+        
+        st.header("📊 Current Analysis")
+        
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.write("**Next allowed action: BUY or SELL**")
-            st.write("BUY triggers:")
-            if close > trend_ma:
-                
-                st.write(f"- BUY at 7-day low (${low7:.2f}): {buy_amount/low7:.4f} shares")
-                st.write(f"- BUY at 14-day low (${low14:.2f}): {buy_amount/low14:.4f} shares")
-                st.write(f"- BUY at 21-day low (${low21:.2f}): {buy_amount/low21:.4f} shares")
-            else:
-                st.write("❌ Trend filter blocks buys (price below MA)")
+            st.metric("Current Price", f"${current_price:.2f}")
         with col2:
-            st.write("SELL triggers:")
-            st.write(f"- SELL at 7-day high (${high7:.2f}): {sell_amount/high7:.4f} shares")
-            st.write(f"- SELL at 14-day high (${high14:.2f}): {sell_amount/high14:.4f} shares")
-            st.write(f"- SELL at 21-day high (${high21:.2f}): {sell_amount/high21:.4f} shares")
-    with col1:
-        if next_action.startswith("BUY"):
-            st.write(
-                f"**Trend filter:** "
-                f"{'✅ Above MA — buys allowed' if trend_ok else '❌ Below MA — buys blocked'}"
-            )
+            st.metric("RSI", f"{current_rsi:.1f}")
+        with col3:
+            st.metric("Buy Target", f"${current_bb_lower:.2f}", 
+                     delta=f"{((current_bb_lower - current_price) / current_price * 100):.1f}%")
+        with col4:
+            st.metric("Sell Target", f"${current_bb_upper:.2f}",
+                     delta=f"{((current_bb_upper - current_price) / current_price * 100):.1f}%")
+        
+        # Trading recommendation
+        st.subheader("🎲 Current Recommendation")
+        if current_rsi < rsi_oversold and current_price < current_bb_lower * 1.02:
+            st.success(f"🟢 **BUY SIGNAL** - Price near lower band (${current_bb_lower:.2f}) with RSI oversold ({current_rsi:.1f})")
+        elif current_rsi > rsi_overbought and current_price > current_bb_upper * 0.98:
+            st.warning(f"🔴 **SELL SIGNAL** - Price near upper band (${current_bb_upper:.2f}) with RSI overbought ({current_rsi:.1f})")
+        else:
+            st.info(f"⚪ **HOLD** - Wait for clearer signal (RSI: {current_rsi:.1f})")
+        
+        # Price chart
+        st.subheader("📈 Price Chart with Indicators")
+        chart_data = data[['Close', 'MA_Short', 'MA_Long', 'BB_Upper', 'BB_Lower']].tail(90)
+        st.line_chart(chart_data)
+        
+        # RSI chart
+        st.subheader("📉 RSI Indicator")
+        rsi_chart = data[['RSI']].tail(90)
+        st.line_chart(rsi_chart)
+        st.caption(f"Buy when RSI < {rsi_oversold} | Sell when RSI > {rsi_overbought}")
+        
+        # Backtest results
+        st.subheader("🔬 Strategy Backtest")
+        trades_df = backtest_strategy(data)
+        
+        if not trades_df.empty:
+            completed_trades = trades_df[trades_df['Type'] == 'SELL']
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Trades", f"{len(completed_trades)}")
+            with col2:
+                avg_return = completed_trades['Return'].mean()
+                st.metric("Avg Return per Trade", f"{avg_return:.2f}%")
+            with col3:
+                win_rate = (completed_trades['Return'] > 0).sum() / len(completed_trades) * 100
+                st.metric("Win Rate", f"{win_rate:.1f}%")
+            
+            # Trades per year
+            days_analyzed = (data.index[-1] - data.index[0]).days
+            trades_per_year = (len(completed_trades) / days_analyzed) * 365
+            st.info(f"📅 Historical trading frequency: ~{trades_per_year:.0f} trades per year")
+            
+            # Show recent trades
+            with st.expander("View Recent Trades"):
+                st.dataframe(trades_df.tail(20).style.format({
+                    'Price': '${:.2f}',
+                    'Return': '{:.2f}%'
+                }))
+        else:
+            st.warning("No completed trades found in backtest period. Try adjusting parameters.")
+            
+except Exception as e:
+    st.error(f"Error: {str(e)}")
 
-show_next_triggers()
-
-# -----------------------------------------
-# Run hybrid strategy
-# -----------------------------------------
-for idx, row in df.iterrows():
-    low = row["Low"].item()
-    high = row["High"].item()
-    close = row["Close"].item()
-
-    low7 = row["Low7"].item()
-    high7 = row["High7"].item()
-    low14 = row["Low14"].item()
-    high14 = row["High14"].item()
-    low21 = row["Low21"].item()
-    high21 = row["High21"].item()
-    trend_ma = row[f"MA{trend_ma_period}"].item()
-
-    portfolio_value = cash + shares * close
-
-    # -------------------------
-    # BUY TRIGGERS (A, C, E)
-    # -------------------------
-    if last_action != "BUY" and close > trend_ma:
-        buy_executed = False
-
-        # A: 7-day low
-        if low <= low7 and cash > 0:
-            portfolio_value = cash + shares * close
-            buy_amount = min(cash, buy_risk_pct * portfolio_value)
-            if buy_amount > 0:
-                qty = buy_amount / low7
-                cash -= buy_amount
-                shares += qty
-                buy_executed = True
-                trades.append([idx, "BUY 7-day low", low7, qty, cash, shares])
-
-        # C: 14-day low
-        if low <= low14 and cash > 0:
-            portfolio_value = cash + shares * close
-            buy_amount = min(cash, buy_risk_pct * portfolio_value)
-            if buy_amount > 0:
-                qty = buy_amount / low14
-                cash -= buy_amount
-                shares += qty
-                buy_executed = True
-                trades.append([idx, "BUY 14-day low", low14, qty, cash, shares])
-
-        # E: 21-day low
-        if low <= low21 and cash > 0:
-            portfolio_value = cash + shares * close
-            buy_amount = min(cash, buy_risk_pct * portfolio_value)
-            if buy_amount > 0:
-                qty = buy_amount / low21
-                cash -= buy_amount
-                shares += qty
-                buy_executed = True
-                trades.append([idx, "BUY 21-day low", low21, qty, cash, shares])
-
-        if buy_executed:
-            last_action = "BUY"
-
-    # -------------------------
-    # SELL TRIGGERS (B, D, F)
-    # -------------------------
-    if last_action != "SELL" and shares > 0:
-        sell_executed = False
-
-        # B: 7-day high
-        if high >= high7 and shares > 0:
-            position_value = shares * close
-            sell_value = sell_risk_pct * position_value
-            price = high7
-            qty = min(shares, sell_value / price)
-            if qty > 0:
-                cash += qty * price
-                shares -= qty
-                sell_executed = True
-                trades.append([idx, "SELL 7-day high", price, qty, cash, shares])
-
-        # D: 14-day high
-        if high >= high14 and shares > 0:
-            position_value = shares * close
-            sell_value = sell_risk_pct * position_value
-            price = high14
-            qty = min(shares, sell_value / price)
-            if qty > 0:
-                cash += qty * price
-                shares -= qty
-                sell_executed = True
-                trades.append([idx, "SELL 14-day high", price, qty, cash, shares])
-
-        # F: 21-day high
-        if high >= high21 and shares > 0:
-            position_value = shares * close
-            sell_value = sell_risk_pct * position_value
-            price = high21
-            qty = min(shares, sell_value / price)
-            if qty > 0:
-                cash += qty * price
-                shares -= qty
-                sell_executed = True
-                trades.append([idx, "SELL 21-day high", price, qty, cash, shares])
-
-        if sell_executed:
-            last_action = "SELL"
-
-    portfolio.append([idx, float(cash + shares * close)])
-
-# Final strategy value
-final_value = cash + shares * df["Close"].iloc[-1].item()
-
-# -----------------------------------------
-# Buy-until-cash-is-gone benchmark
-# -----------------------------------------
-first_price = df["Close"].iloc[0].item()
-buy_hold_shares = user_cash / first_price
-buy_hold_value = buy_hold_shares * df["Close"].iloc[-1].item()
-
-# -----------------------------------------
-# Display results
-# -----------------------------------------
-with col3:
-    st.subheader("Final Results")
-    st.write(f"**Hybrid Trigger Strategy Final Value:** ${final_value:,.2f}")
-    st.write(f"**Buy-Until-Cash-Is-Invested Final Value:** ${buy_hold_value:,.2f}")
-
-# Trade log
-st.subheader("Trade Log")
-trades_df = pd.DataFrame(
-    trades,
-    columns=["Date", "Trigger", "Price", "Shares", "CashAfter", "SharesAfter"]
-)
-st.dataframe(trades_df)
-
-# Portfolio curve
-portfolio_df = pd.DataFrame(portfolio, columns=["Date", "Value"])
-portfolio_df.set_index("Date", inplace=True)
-
-st.subheader("Portfolio Value Over Time")
-st.line_chart(portfolio_df)
-
-st.subheader(f"{ticker} Closing Price")
-st.line_chart(df["Close"])
+st.sidebar.markdown("---")
+st.sidebar.info("""
+**Strategy Logic:**
+- **BUY** when RSI is oversold AND price near lower Bollinger Band
+- **SELL** when RSI is overbought AND price near upper Bollinger Band
+- Targets aim for 2-3 trades per month
+""")
