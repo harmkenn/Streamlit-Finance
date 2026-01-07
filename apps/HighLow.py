@@ -3,7 +3,10 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 from datetime import datetime, timedelta
-# v1.2
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+# v 1.4
 st.set_page_config(page_title="TQQQ Trading Analyzer", layout="wide")
 
 st.title("🎯 TQQQ Buy/Sell Target Price Analyzer")
@@ -23,7 +26,9 @@ st.sidebar.subheader("Strategy Enhancements")
 use_trend_filter = st.sidebar.checkbox("Use Trend Filter (50-day MA)", value=True)
 use_volatility_filter = st.sidebar.checkbox("Use Volatility Filter", value=True)
 use_momentum_confirm = st.sidebar.checkbox("Require MA Crossover Confirmation", value=True)
+use_ml_prediction = st.sidebar.checkbox("Use ML Price Prediction", value=True)
 profit_target = st.sidebar.slider("Profit Target (%)", 5, 30, 15)
+ml_confidence_threshold = st.sidebar.slider("ML Confidence Threshold (%)", 50, 80, 60)
 
 # Fetch TQQQ data
 @st.cache_data(ttl=3600)
@@ -65,9 +70,152 @@ def calculate_indicators(df):
     
     return df
 
+# Create ML features
+def create_ml_features(df):
+    """Create features for machine learning prediction"""
+    ml_df = df.copy()
+    
+    # Price-based features
+    ml_df['Returns_1d'] = df['Close'].pct_change(1)
+    ml_df['Returns_3d'] = df['Close'].pct_change(3)
+    ml_df['Returns_5d'] = df['Close'].pct_change(5)
+    ml_df['Returns_10d'] = df['Close'].pct_change(10)
+    
+    # Volatility features
+    ml_df['Volatility_5d'] = df['Close'].pct_change().rolling(5).std()
+    ml_df['Volatility_10d'] = df['Close'].pct_change().rolling(10).std()
+    
+    # Volume features
+    ml_df['Volume_Ratio'] = df['Volume'] / df['Volume'].rolling(20).mean()
+    ml_df['Volume_Change'] = df['Volume'].pct_change()
+    
+    # Technical indicator features
+    ml_df['RSI_Change'] = df['RSI'].diff()
+    ml_df['Price_to_MA20'] = df['Close'] / df['BB_Middle']
+    ml_df['Price_to_MA50'] = df['Close'] / df['MA_50']
+    ml_df['BB_Width'] = (df['BB_Upper'] - df['BB_Lower']) / df['BB_Middle']
+    ml_df['Distance_to_BB_Upper'] = (df['BB_Upper'] - df['Close']) / df['Close']
+    ml_df['Distance_to_BB_Lower'] = (df['Close'] - df['BB_Lower']) / df['Close']
+    
+    # Momentum features
+    ml_df['MA_Short_Slope'] = df['MA_Short'].diff()
+    ml_df['MA_Long_Slope'] = df['MA_Long'].diff()
+    ml_df['MACD'] = df['MA_Short'] - df['MA_Long']
+    
+    # Target: 1 if price goes up tomorrow, 0 if down
+    ml_df['Target'] = (df['Close'].shift(-1) > df['Close']).astype(int)
+    
+    # Target for regression: actual next day return
+    ml_df['Target_Return'] = df['Close'].pct_change().shift(-1)
+    
+    return ml_df
+
+# Train ML model
+@st.cache_data(ttl=3600)
+def train_ml_model(df):
+    """Train Random Forest to predict price direction"""
+    ml_df = create_ml_features(df)
+    
+    # Select features
+    feature_cols = ['Returns_1d', 'Returns_3d', 'Returns_5d', 'Returns_10d',
+                    'Volatility_5d', 'Volatility_10d', 'Volume_Ratio', 'Volume_Change',
+                    'RSI', 'RSI_Change', 'Price_to_MA20', 'Price_to_MA50', 
+                    'BB_Width', 'Distance_to_BB_Upper', 'Distance_to_BB_Lower',
+                    'MA_Short_Slope', 'MA_Long_Slope', 'MACD', 'ATR_Pct']
+    
+    # Remove NaN rows
+    ml_df = ml_df.dropna()
+    
+    if len(ml_df) < 100:
+        return None, None, None, None
+    
+    X = ml_df[feature_cols]
+    y = ml_df['Target']
+    
+    # Split data (80% train, 20% test)
+    split_idx = int(len(X) * 0.8)
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Train Random Forest
+    model = RandomForestClassifier(
+        n_estimators=100,
+        max_depth=10,
+        min_samples_split=20,
+        min_samples_leaf=10,
+        random_state=42,
+        n_jobs=-1
+    )
+    model.fit(X_train_scaled, y_train)
+    
+    # Calculate accuracy
+    train_accuracy = model.score(X_train_scaled, y_train)
+    test_accuracy = model.score(X_test_scaled, y_test)
+    
+    # Feature importance
+    feature_importance = pd.DataFrame({
+        'Feature': feature_cols,
+        'Importance': model.feature_importances_
+    }).sort_values('Importance', ascending=False)
+    
+    return model, scaler, feature_importance, test_accuracy
+
+# Get ML prediction
+def get_ml_prediction(df, model, scaler):
+    """Get ML prediction for next day"""
+    if model is None:
+        return None, None
+    
+    ml_df = create_ml_features(df)
+    
+    feature_cols = ['Returns_1d', 'Returns_3d', 'Returns_5d', 'Returns_10d',
+                    'Volatility_5d', 'Volatility_10d', 'Volume_Ratio', 'Volume_Change',
+                    'RSI', 'RSI_Change', 'Price_to_MA20', 'Price_to_MA50', 
+                    'BB_Width', 'Distance_to_BB_Upper', 'Distance_to_BB_Lower',
+                    'MA_Short_Slope', 'MA_Long_Slope', 'MACD', 'ATR_Pct']
+    
+    # Get last row (most recent data)
+    last_row = ml_df[feature_cols].iloc[-1:].values
+    
+    if np.isnan(last_row).any():
+        return None, None
+    
+    # Scale and predict
+    last_row_scaled = scaler.transform(last_row)
+    prediction = model.predict(last_row_scaled)[0]
+    probabilities = model.predict_proba(last_row_scaled)[0]
+    
+    # Confidence is the probability of the predicted class
+    confidence = probabilities[prediction] * 100
+    
+    return prediction, confidence
+
 # Generate signals
-def generate_signals(df, rsi_low, rsi_high):
+def generate_signals(df, rsi_low, rsi_high, ml_model=None, ml_scaler=None):
     df['Signal'] = 0
+    
+    # Get ML predictions for each row if model provided
+    ml_predictions = []
+    ml_confidences = []
+    
+    if use_ml_prediction and ml_model is not None:
+        for i in range(len(df)):
+            if i < 50:  # Need enough history for features
+                ml_predictions.append(None)
+                ml_confidences.append(None)
+            else:
+                df_slice = df.iloc[:i+1]
+                pred, conf = get_ml_prediction(df_slice, ml_model, ml_scaler)
+                ml_predictions.append(pred)
+                ml_confidences.append(conf)
+        
+        df['ML_Prediction'] = ml_predictions
+        df['ML_Confidence'] = ml_confidences
     
     # Base buy condition: RSI oversold AND price near lower Bollinger Band
     buy_condition = (df['RSI'] < rsi_low) & (df['Close'] < df['BB_Lower'] * 1.05)
@@ -85,11 +233,21 @@ def generate_signals(df, rsi_low, rsi_high):
     if use_momentum_confirm:
         buy_condition = buy_condition & (df['MA_Short'] > df['MA_Short'].shift(1))
     
+    # Add ML prediction filter: only buy if ML predicts price will go up
+    if use_ml_prediction and ml_model is not None:
+        ml_buy_condition = (df['ML_Prediction'] == 1) & (df['ML_Confidence'] >= ml_confidence_threshold)
+        buy_condition = buy_condition & ml_buy_condition
+    
     df.loc[buy_condition, 'Signal'] = 1
     
     # Enhanced sell conditions
     sell_condition_1 = (df['RSI'] > rsi_high) & (df['Close'] > df['BB_Upper'] * 0.98)  # Overbought
     sell_condition_2 = (df['Close'] < df['MA_50']) & (df['RSI'] < 50)  # Trend break with weak momentum
+    
+    # ML-based sell: if ML predicts down with high confidence
+    if use_ml_prediction and ml_model is not None:
+        ml_sell_condition = (df['ML_Prediction'] == 0) & (df['ML_Confidence'] >= ml_confidence_threshold)
+        sell_condition_1 = sell_condition_1 | ml_sell_condition
     
     df.loc[sell_condition_1 | sell_condition_2, 'Signal'] = -1
     
@@ -176,7 +334,18 @@ try:
     else:
         # Calculate indicators
         data = calculate_indicators(data)
-        data = generate_signals(data, rsi_oversold, rsi_overbought)
+        
+        # Train ML model if enabled
+        ml_model = None
+        ml_scaler = None
+        ml_feature_importance = None
+        ml_test_accuracy = None
+        
+        if use_ml_prediction:
+            with st.spinner("Training ML model..."):
+                ml_model, ml_scaler, ml_feature_importance, ml_test_accuracy = train_ml_model(data)
+        
+        data = generate_signals(data, rsi_oversold, rsi_overbought, ml_model, ml_scaler)
         
         # Current metrics
         current_price = data['Close'].iloc[-1]
@@ -198,6 +367,44 @@ try:
             st.metric("Sell Target", f"${current_bb_upper:.2f}",
                      delta=f"{((current_bb_upper - current_price) / current_price * 100):.1f}%")
         
+        # ML Prediction Section
+        if use_ml_prediction and ml_model is not None:
+            st.header("🤖 AI Price Prediction")
+            
+            # Get current prediction
+            ml_prediction, ml_confidence = get_ml_prediction(data, ml_model, ml_scaler)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if ml_prediction == 1:
+                    st.success(f"**Prediction: UP** ⬆️")
+                else:
+                    st.error(f"**Prediction: DOWN** ⬇️")
+            with col2:
+                confidence_color = "success" if ml_confidence >= 70 else "warning" if ml_confidence >= 60 else "error"
+                getattr(st, confidence_color)(f"**Confidence: {ml_confidence:.1f}%**")
+            with col3:
+                st.metric("Model Accuracy", f"{ml_test_accuracy*100:.1f}%")
+            
+            st.caption(f"The ML model predicts tomorrow's price direction based on {len(ml_feature_importance)} features.")
+            
+            # Feature importance
+            with st.expander("🔍 What is the AI Learning?"):
+                st.write("**Top 10 Most Important Features:**")
+                top_features = ml_feature_importance.head(10)
+                
+                # Create a simple bar chart
+                st.bar_chart(top_features.set_index('Feature')['Importance'])
+                
+                st.caption("""
+                **Feature Importance** shows which technical indicators the AI finds most predictive:
+                - Higher values = more important for predictions
+                - The model learns patterns humans might miss
+                - Combines 19 different technical and momentum indicators
+                """)
+        elif use_ml_prediction:
+            st.warning("⚠️ ML model training failed. Need more data or check for errors.")
+        
         # Trading recommendation
         st.subheader("🎲 Current Recommendation")
         
@@ -208,12 +415,22 @@ try:
         atr_ok = data['ATR_Pct'].iloc[-1] < data['ATR_Pct'].quantile(0.75) if use_volatility_filter else True
         ma_turning_up = data['MA_Short'].iloc[-1] > data['MA_Short'].iloc[-2] if use_momentum_confirm else True
         
+        # ML condition
+        ml_says_buy = False
+        ml_says_sell = False
+        if use_ml_prediction and ml_model is not None:
+            ml_prediction, ml_confidence = get_ml_prediction(data, ml_model, ml_scaler)
+            ml_says_buy = (ml_prediction == 1) and (ml_confidence >= ml_confidence_threshold)
+            ml_says_sell = (ml_prediction == 0) and (ml_confidence >= ml_confidence_threshold)
+        
         buy_signal = is_oversold and near_lower_band and above_trend and atr_ok and ma_turning_up
+        if use_ml_prediction and ml_model is not None:
+            buy_signal = buy_signal and ml_says_buy
         
         is_overbought = current_rsi > rsi_overbought
         near_upper_band = current_price > current_bb_upper * 0.98
         
-        sell_signal = is_overbought and near_upper_band
+        sell_signal = (is_overbought and near_upper_band) or (use_ml_prediction and ml_says_sell)
         
         if buy_signal:
             st.success(f"🟢 **BUY SIGNAL** - All conditions met!")
@@ -223,10 +440,15 @@ try:
                 st.write(f"✓ Above 50-day MA: ${data['MA_50'].iloc[-1]:.2f}")
             if use_volatility_filter:
                 st.write(f"✓ Volatility acceptable: {data['ATR_Pct'].iloc[-1]:.1f}%")
+            if use_ml_prediction and ml_model is not None:
+                st.write(f"✓ AI predicts UP with {ml_confidence:.1f}% confidence")
         elif sell_signal:
             st.warning(f"🔴 **SELL SIGNAL** - Take profits!")
-            st.write(f"- Price: ${current_price:.2f} (near resistance ${current_bb_upper:.2f})")
-            st.write(f"- RSI: {current_rsi:.1f} (overbought)")
+            st.write(f"- Price: ${current_price:.2f}")
+            if is_overbought and near_upper_band:
+                st.write(f"- RSI: {current_rsi:.1f} (overbought)")
+            if use_ml_prediction and ml_says_sell:
+                st.write(f"- AI predicts DOWN with {ml_confidence:.1f}% confidence")
         else:
             st.info(f"⚪ **HOLD** - Wait for better setup")
             reasons = []
@@ -236,6 +458,8 @@ try:
                 reasons.append(f"Below trend (50-MA: ${data['MA_50'].iloc[-1]:.2f})")
             if use_volatility_filter and not atr_ok:
                 reasons.append("Volatility too high")
+            if use_ml_prediction and ml_model is not None and not ml_says_buy:
+                reasons.append(f"AI not confident (needs {ml_confidence_threshold}%, has {ml_confidence:.1f}%)")
             if reasons:
                 st.write("Waiting for: " + ", ".join(reasons))
         
@@ -287,7 +511,15 @@ try:
         # Fetch 5 year data for simulation
         data_5yr = fetch_data(60)  # 60 months = 5 years
         data_5yr = calculate_indicators(data_5yr)
-        data_5yr = generate_signals(data_5yr, rsi_oversold, rsi_overbought)
+        
+        # Train ML model on 5-year data if enabled
+        ml_model_5yr = None
+        ml_scaler_5yr = None
+        if use_ml_prediction:
+            with st.spinner("Training ML model on 5-year data..."):
+                ml_model_5yr, ml_scaler_5yr, _, _ = train_ml_model(data_5yr)
+        
+        data_5yr = generate_signals(data_5yr, rsi_oversold, rsi_overbought, ml_model_5yr, ml_scaler_5yr)
         
         initial_capital = 100000
         portfolio_df, final_cash, final_shares = simulate_portfolio(data_5yr, initial_capital)
@@ -389,11 +621,17 @@ st.sidebar.info("""
 - Optional: Above 50-day MA (uptrend)
 - Optional: Volatility not extreme
 - Optional: Short MA turning up
+- **NEW: ML predicts price UP with high confidence**
 
 **SELL when:**
 - RSI overbought OR
 - Price breaks below 50-day MA with weak RSI OR
-- Profit target reached
+- Profit target reached OR
+- **NEW: ML predicts price DOWN with high confidence**
 
-This strategy aims to buy dips in uptrends and avoid prolonged drawdowns.
+**ML Model:**
+- Random Forest trained on 19 technical features
+- Learns from historical patterns
+- Predicts next day direction
+- Only trades when confidence > threshold
 """)
