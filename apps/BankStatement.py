@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 from ofxparse import OfxParser
 
-# Set the page layout to wide
-st.set_page_config(layout="wide", page_title="Finance")
-
 # Function to parse OFX file and extract transactions
 def parse_ofx(file):
     ofx = OfxParser.parse(file)
@@ -71,6 +68,15 @@ def main():
 
             st.success("Files processed successfully!")
             
+            # Add blank "Sub" column to the left of "Category"
+            all_transactions.insert(all_transactions.columns.get_loc("Category"), "Sub", "")
+            
+            # Reorder columns to move Amount to the end
+            cols = all_transactions.columns.tolist()
+            cols.remove("Amount")
+            cols.append("Amount")
+            all_transactions = all_transactions[cols]
+            
             # Display the consolidated DataFrame
             st.write("### Consolidated Transactions Data")
             st.dataframe(all_transactions)
@@ -78,6 +84,16 @@ def main():
             # Display the monthly summary table
             st.write("### Monthly Summary by Category")
             st.dataframe(monthly_summary)
+
+            # Display expenses by account and month
+            st.write("### Expenses by Account and Month")
+            expenses_data = all_transactions[all_transactions["Category"] == "Expense"]
+            if not expenses_data.empty:
+                expenses_by_account_month = expenses_data.groupby(["Account ID", "Month"])["Amount"].sum().reset_index()
+                expenses_pivot = expenses_by_account_month.pivot(index="Month", columns="Account ID", values="Amount").fillna(0)
+                st.dataframe(expenses_pivot)
+            else:
+                st.info("No expense transactions found.")
 
             # Option to download the consolidated DataFrame as CSV
             csv = all_transactions.to_csv(index=False)
@@ -99,5 +115,5 @@ def main():
         else:
             st.warning("No transactions found in the uploaded files.")
 
-if __name__ == "__main__":
-    main()
+main()
+
