@@ -64,9 +64,10 @@ def main():
             # Extract the month from the "Date Posted" column
             all_transactions["Month"] = all_transactions["Date Posted"].dt.to_period("M")
 
-            # Calculate total expenses per month
-            monthly_expenses = all_transactions[all_transactions["Category"] == "Expense"].groupby("Month")["Amount"].sum().reset_index()
-            monthly_expenses.rename(columns={"Amount": "Total Expenses"}, inplace=True)
+            # Calculate total amounts per category per month
+            monthly_summary = all_transactions.groupby(["Month", "Category"])["Amount"].sum().reset_index()
+            monthly_summary = monthly_summary.pivot(index="Month", columns="Category", values="Amount").fillna(0)
+            monthly_summary["Total Expenses"] = monthly_summary.get("Expense", 0)  # Add a column for total expenses
 
             st.success("Files processed successfully!")
             
@@ -74,9 +75,9 @@ def main():
             st.write("### Consolidated Transactions Data")
             st.dataframe(all_transactions)
 
-            # Display the monthly expenses table
-            st.write("### Total Expenses Per Month")
-            st.dataframe(monthly_expenses)
+            # Display the monthly summary table
+            st.write("### Monthly Summary by Category")
+            st.dataframe(monthly_summary)
 
             # Option to download the consolidated DataFrame as CSV
             csv = all_transactions.to_csv(index=False)
@@ -84,6 +85,15 @@ def main():
                 label="Download Consolidated CSV",
                 data=csv,
                 file_name="consolidated_transactions.csv",
+                mime="text/csv"
+            )
+
+            # Option to download the monthly summary table as CSV
+            summary_csv = monthly_summary.to_csv(index=True)
+            st.download_button(
+                label="Download Monthly Summary CSV",
+                data=summary_csv,
+                file_name="monthly_summary.csv",
                 mime="text/csv"
             )
         else:
