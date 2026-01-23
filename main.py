@@ -19,7 +19,7 @@ sub_app_names = {
     'HighLow.py': 'High Low Strategy',
     'HighLowCompare.py': 'High Low MA Strategy',
     'HighLowBack.py': 'High Low Back Strategy',
-    'BankStatements.py': 'Bank Statements'
+    'BankStatement.py': 'Bank Statements'
 }
 
 # Get a list of .py files from the SubApps folder
