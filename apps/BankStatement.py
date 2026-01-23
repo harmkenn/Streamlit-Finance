@@ -46,17 +46,12 @@ def main():
             # Remove duplicate transactions based on FITID
             all_transactions = all_transactions.drop_duplicates(subset=["FITID"])
 
-            # Replace specific Memo items with "Card Pay"
-            all_transactions["Memo"] = all_transactions["Memo"].apply(
-                lambda memo: "Card Pay" if memo in [
-                    "Direct Debit - CHASE CREDIT CRD EPAY",
-                    "Withdrawal ACH CITI CARD ONLINE TYPE: PAYMENT ID: CITICTP CO: CI"
-                ] else memo
-            )
-
             # Add the "Category" column based on the Memo content
             all_transactions["Category"] = all_transactions["Memo"].apply(
-                lambda memo: "Transfer" if "Transfer" in str(memo) else "Expense"
+                lambda memo: "Card Pay" if any(keyword in str(memo) for keyword in [
+                    "Direct Debit - CHASE CREDIT CRD EPAY",
+                    "Withdrawal ACH CITI CARD ONLINE TYPE: PAYMENT ID: CITICTP CO: CI"
+                ]) else ("Transfer" if "Transfer" in str(memo) else "Expense")
             )
 
             # Update the "Category" to "Deposit" if the Category is "Expense" and the Amount is positive
