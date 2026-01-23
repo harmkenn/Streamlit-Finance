@@ -51,7 +51,8 @@ def main():
                 lambda memo: "Card Pay" if any(keyword in str(memo) for keyword in [
                     "Direct Debit - CHASE CREDIT CRD EPAY",
                     "Withdrawal ACH CITI CARD ONLINE TYPE: PAYMENT ID: CITICTP CO: CI"
-                ]) else ("Transfer" if "Transfer" in str(memo) else "Expense")
+                ]) else ("Housing" if any(keyword in str(memo) for keyword in ["Wise", "AGSM"]) else (
+                    "Transfer" if "Transfer" in str(memo) else "Expense"))
             )
 
             # Update the "Category" to "Deposit" if the Category is "Expense" and the Amount is positive
