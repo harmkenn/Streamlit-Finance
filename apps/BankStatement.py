@@ -57,13 +57,24 @@ def main():
                 axis=1
             )
 
+            # Extract the month from the "Date Posted" column
+            all_transactions["Month"] = all_transactions["Date Posted"].dt.to_period("M")
+
+            # Calculate total expenses per month
+            monthly_expenses = all_transactions[all_transactions["Category"] == "Expense"].groupby("Month")["Amount"].sum().reset_index()
+            monthly_expenses.rename(columns={"Amount": "Total Expenses"}, inplace=True)
+
             st.success("Files processed successfully!")
             
-            # Display the DataFrame
+            # Display the consolidated DataFrame
             st.write("### Consolidated Transactions Data")
             st.dataframe(all_transactions)
 
-            # Option to download the DataFrame as CSV
+            # Display the monthly expenses table
+            st.write("### Total Expenses Per Month")
+            st.dataframe(monthly_expenses)
+
+            # Option to download the consolidated DataFrame as CSV
             csv = all_transactions.to_csv(index=False)
             st.download_button(
                 label="Download Consolidated CSV",
