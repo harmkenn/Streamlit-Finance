@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 from ofxparse import OfxParser
 
-# Set Streamlit page configuration for wide-screen layout
-st.set_page_config(page_title="OFX File Processor", layout="wide")
-
 # Function to parse OFX file and extract transactions
 def parse_ofx(file):
     ofx = OfxParser.parse(file)
