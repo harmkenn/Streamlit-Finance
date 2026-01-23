@@ -51,6 +51,12 @@ def main():
                 lambda memo: "Transfer" if "Transfer" in str(memo) else "Expense"
             )
 
+            # Update the "Category" to "Deposit" if the Category is "Expense" and the Amount is positive
+            all_transactions["Category"] = all_transactions.apply(
+                lambda row: "Deposit" if row["Category"] == "Expense" and row["Amount"] > 0 else row["Category"],
+                axis=1
+            )
+
             st.success("Files processed successfully!")
             
             # Display the DataFrame
