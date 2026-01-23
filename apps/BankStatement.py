@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from ofxparse import OfxParser
 
+# Set Streamlit page configuration for wide-screen layout
+st.set_page_config(page_title="OFX File Processor", layout="wide")
+
 # Function to parse OFX file and extract transactions
 def parse_ofx(file):
     ofx = OfxParser.parse(file)
@@ -23,29 +26,42 @@ def parse_ofx(file):
 # Streamlit app
 def main():
     st.title("OFX File Processor")
-    st.write("Upload an OFX file to process it into a Pandas DataFrame.")
+    st.write("Upload one or more OFX files to process them into a Pandas DataFrame.")
 
-    uploaded_file = st.file_uploader("Upload OFX File", type=["ofx"])
-    if uploaded_file is not None:
-        try:
-            # Parse the uploaded OFX file
-            df = parse_ofx(uploaded_file)
-            st.success("File processed successfully!")
+    # File uploader for multiple files
+    uploaded_files = st.file_uploader("Upload OFX Files", type=["ofx"], accept_multiple_files=True)
+
+    if uploaded_files:
+        all_transactions = pd.DataFrame()  # Initialize an empty DataFrame
+
+        for uploaded_file in uploaded_files:
+            try:
+                # Parse each uploaded OFX file
+                df = parse_ofx(uploaded_file)
+                all_transactions = pd.concat([all_transactions, df], ignore_index=True)
+            except Exception as e:
+                st.error(f"Error processing file {uploaded_file.name}: {e}")
+
+        if not all_transactions.empty:
+            # Remove duplicate transactions based on FITID
+            all_transactions = all_transactions.drop_duplicates(subset=["FITID"])
+
+            st.success("Files processed successfully!")
             
             # Display the DataFrame
-            st.write("### Transactions Data")
-            st.dataframe(df)
+            st.write("### Consolidated Transactions Data")
+            st.dataframe(all_transactions)
 
             # Option to download the DataFrame as CSV
-            csv = df.to_csv(index=False)
+            csv = all_transactions.to_csv(index=False)
             st.download_button(
-                label="Download CSV",
+                label="Download Consolidated CSV",
                 data=csv,
-                file_name="transactions.csv",
+                file_name="consolidated_transactions.csv",
                 mime="text/csv"
             )
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+        else:
+            st.warning("No transactions found in the uploaded files.")
 
 if __name__ == "__main__":
     main()
