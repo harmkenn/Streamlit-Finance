@@ -4,6 +4,7 @@
 streamlit
 pandas
 numpy
+ofxparse
 yahooquery
 plotly
 prophet
