@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 from ofxparse import OfxParser
 
+# Set the page layout to wide
+st.set_page_config(layout="wide", page_title="Finance")
+
 # Function to parse OFX file and extract transactions
 def parse_ofx(file):
     ofx = OfxParser.parse(file)
@@ -42,6 +45,11 @@ def main():
         if not all_transactions.empty:
             # Remove duplicate transactions based on FITID
             all_transactions = all_transactions.drop_duplicates(subset=["FITID"])
+
+            # Add the "Category" column based on the Memo content
+            all_transactions["Category"] = all_transactions["Memo"].apply(
+                lambda memo: "Transfer" if "Transfer" in str(memo) else "Expense"
+            )
 
             st.success("Files processed successfully!")
             
