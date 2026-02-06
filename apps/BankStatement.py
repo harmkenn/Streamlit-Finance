@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 from ofxparse import OfxParser
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import make_pipeline
 
 # Function to parse OFX file and extract transactions
 def parse_ofx(file):
@@ -24,6 +27,25 @@ def parse_ofx(file):
 def main():
     st.title("OFX File Processor")
     st.write("Upload one or more OFX files to process them into a Pandas DataFrame.")
+
+    # Sidebar for training data
+    st.sidebar.header("Categorization Learning")
+    training_file = st.sidebar.file_uploader("Upload History CSV (Memo, Sub)", type=["csv"])
+    
+    model = None
+    if training_file:
+        try:
+            train_df = pd.read_csv(training_file)
+            if "Memo" in train_df.columns and "Sub" in train_df.columns:
+                train_df["Memo"] = train_df["Memo"].fillna("").astype(str)
+                train_df = train_df.dropna(subset=["Sub"])
+                model = make_pipeline(CountVectorizer(), MultinomialNB())
+                model.fit(train_df["Memo"], train_df["Sub"])
+                st.sidebar.success(f"Model trained on {len(train_df)} records.")
+            else:
+                st.sidebar.error("CSV must contain 'Memo' and 'Sub' columns.")
+        except Exception as e:
+            st.sidebar.error(f"Error training model: {e}")
 
     # File uploader for multiple files
     uploaded_files = st.file_uploader("Upload OFX Files", type=["ofx"], accept_multiple_files=True)
@@ -68,8 +90,13 @@ def main():
 
             st.success("Files processed successfully!")
             
-            # Add blank "Sub" column to the left of "Category"
-            all_transactions.insert(all_transactions.columns.get_loc("Category"), "Sub", "")
+            # Predict "Sub" category if model is available
+            sub_values = ""
+            if model:
+                sub_values = model.predict(all_transactions["Memo"].fillna("").astype(str))
+            
+            # Add "Sub" column to the left of "Category"
+            all_transactions.insert(all_transactions.columns.get_loc("Category"), "Sub", sub_values)
             
             # Reorder columns to move Amount to the end
             cols = all_transactions.columns.tolist()
@@ -95,6 +122,19 @@ def main():
             else:
                 st.info("No expense transactions found.")
 
+            # Sub-category Breakdown by Account
+            st.write("### Sub-category Breakdown by Account")
+            account_list = all_transactions["Account ID"].unique()
+            selected_accounts = st.multiselect("Select Account(s)", account_list, default=account_list)
+
+            if selected_accounts:
+                account_filtered = all_transactions[all_transactions["Account ID"].isin(selected_accounts)]
+                if not account_filtered.empty:
+                    sub_pivot = account_filtered.pivot_table(
+                        index="Month", columns="Sub", values="Amount", aggfunc="sum", fill_value=0
+                    )
+                    st.dataframe(sub_pivot)
+
             # Option to download the consolidated DataFrame as CSV
             csv = all_transactions.to_csv(index=False)
             st.download_button(
@@ -116,4 +156,3 @@ def main():
             st.warning("No transactions found in the uploaded files.")
 
 main()
-
