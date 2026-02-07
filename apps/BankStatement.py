@@ -126,13 +126,17 @@ def main():
             st.write("### Sub-category Breakdown by Account")
             account_list = all_transactions["Account ID"].unique()
             selected_accounts = st.multiselect("Select Account(s)", account_list, default=account_list)
+            category_list = all_transactions["Category"].unique()
+            selected_categories = st.multiselect("Select Category(s)", category_list, default=category_list)
 
-            if selected_accounts:
+            if selected_accounts and selected_categories:
                 account_filtered = all_transactions[all_transactions["Account ID"].isin(selected_accounts)]
+                account_filtered = account_filtered[account_filtered["Category"].isin(selected_categories)]
                 if not account_filtered.empty:
                     sub_pivot = account_filtered.pivot_table(
                         index="Month", columns="Sub", values="Amount", aggfunc="sum", fill_value=0
                     )
+                    sub_pivot["Total"] = sub_pivot.sum(axis=1)
                     st.dataframe(sub_pivot)
 
             # Option to download the consolidated DataFrame as CSV
