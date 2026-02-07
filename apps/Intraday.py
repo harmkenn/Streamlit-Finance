@@ -16,8 +16,6 @@ with col1:
 
     # Ticker selector
     ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
-
-with col3:
     refresh_button = st.button("Refresh")
 
 # --- Main Chart Area ---
@@ -78,6 +76,28 @@ if ticker:
                 f"<span style='color:{color}; font-size:20px'>({percent_diff:+.2f}%)</span>",
                 unsafe_allow_html=True
             )
+
+        # --- Stats Table in Col3 ---
+        with col3:
+            # Fetch daily data for stats (3 months to cover 5 weeks safely)
+            stats_data = yf_ticker.history(period="3mo", interval="1d")
+            
+            if not stats_data.empty:
+                # Define periods (trading days)
+                # 1 week = 5 days, 3 weeks = 15 days, 5 weeks = 25 days
+                w1 = stats_data.tail(5)
+                w3 = stats_data.tail(15)
+                w5 = stats_data.tail(25)
+
+                stats_df = pd.DataFrame({
+                    "Metric": ["5 Week High", "3 Week High", "1 Week High", "5 Week Avg", "1 Week Low", "3 Week Low", "5 Week Low"],
+                    "Value": [w5["High"].max(), w3["High"].max(), w1["High"].max(), w5["Close"].mean(), w1["Low"].min(), w3["Low"].min(), w5["Low"].min()]
+                })
+                
+                # Format values
+                stats_df["Value"] = stats_df["Value"].apply(lambda x: f"${x:,.2f}")
+                
+                st.dataframe(stats_df, hide_index=True, use_container_width=True)
 
         # --- Price Chart ---
         price_fig = go.Figure()
