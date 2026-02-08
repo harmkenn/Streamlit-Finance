@@ -50,10 +50,10 @@ if isinstance(history, pd.DataFrame) and not history.empty:
         height=500
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # Show table
     st.subheader("📄 Normalized Prices Table")
-    st.dataframe(normalized.reset_index(), use_container_width=True)
+    st.dataframe(normalized.reset_index(), width='stretch')
 else:
     st.error("⚠️ Could not retrieve historical data for MSTY and MAIN.")

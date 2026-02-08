@@ -21,7 +21,7 @@ if "Adj Close" in data.columns:
 else:
     series = data["Close"]
 
-st.line_chart(series, use_container_width=True)
+st.line_chart(series, width='stretch')
 
 # Fit ARIMA model
 st.write("Training ARIMA model...")

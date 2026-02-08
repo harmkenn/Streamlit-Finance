@@ -162,7 +162,7 @@ if ticker:
                     xaxis_rangeslider_visible=False
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
                 # Key statistics
                 st.subheader("Key Statistics")

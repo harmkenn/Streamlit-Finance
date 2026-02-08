@@ -97,7 +97,7 @@ if ticker:
                 # Format values
                 stats_df["Value"] = stats_df["Value"].apply(lambda x: f"${x:,.2f}")
                 
-                st.dataframe(stats_df, hide_index=True, use_container_width=True)
+                st.dataframe(stats_df, hide_index=True, width='stretch')
 
         # --- Price Chart ---
         price_fig = go.Figure()

@@ -156,7 +156,7 @@ if ticker:
                     yaxis_title="Price",
                     xaxis_rangeslider_visible=False
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
 
                 # --- RSI + MFI Subplot ---
                 fig2 = go.Figure()
@@ -169,7 +169,7 @@ if ticker:
                 fig2.add_hline(y=20, line=dict(color="green", dash="dot"))
 
                 fig2.update_layout(title="RSI and MFI Indicators", xaxis_title="Date", yaxis_title="Value")
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width='stretch')
 
                 # --- Key Statistics ---
                 st.subheader("Key Statistics")
