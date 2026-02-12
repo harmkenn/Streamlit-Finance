@@ -3,10 +3,10 @@ import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
-
+#v6.0
 # Page configuration
 st.set_page_config(page_title="Intraday Stock Prices", layout="wide")
-st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours) v5.0")
+st.title("📈 Intraday Stock Prices (Including Pre-market, After-hours & Overnight) v6.0")
 
 # --- User input for stock symbol ---
 col1, col2, col3 = st.columns(3)
@@ -31,6 +31,17 @@ if ticker:
             # Convert timestamps to Eastern Time for session filtering
             data = data.tz_convert("America/New_York")
 
+        # -----------------------------
+        # ⭐ ADD OVERNIGHT SESSION HERE
+        # -----------------------------
+        overnight = pd.concat([
+            data.between_time("20:00", "23:59"),
+            data.between_time("00:00", "04:00")
+        ])
+
+        # -----------------------------
+        # Display Overnight Stats
+        # -----------------------------
         with col2:
             # Get the latest price
             latest_price = data["Close"].iloc[-1]
@@ -42,7 +53,6 @@ if ticker:
             daily_closes = regular_hours.groupby(regular_hours.index.date).last()
 
             if len(daily_closes) >= 4:
-                # Get the last 4 closes (most recent 3 for display + 1 to compare from)
                 recent_closes = daily_closes.tail(4)
             else:
                 recent_closes = daily_closes
@@ -77,14 +87,27 @@ if ticker:
                 unsafe_allow_html=True
             )
 
+            # -----------------------------
+            # ⭐ OVERNIGHT PRICE DISPLAY
+            # -----------------------------
+            st.markdown("### 🌙 Overnight Session (8 PM → 4 AM)")
+
+            if not overnight.empty:
+                overnight_low = overnight["Low"].min()
+                overnight_high = overnight["High"].max()
+                overnight_last = overnight["Close"].iloc[-1]
+
+                st.write(f"**Overnight Low:** ${overnight_low:.2f}")
+                st.write(f"**Overnight High:** ${overnight_high:.2f}")
+                st.write(f"**Last Overnight Price:** ${overnight_last:.2f}")
+            else:
+                st.write("No overnight data available.")
+
         # --- Stats Table in Col3 ---
         with col3:
-            # Fetch daily data for stats (3 months to cover 5 weeks safely)
             stats_data = yf_ticker.history(period="3mo", interval="1d")
             
             if not stats_data.empty:
-                # Define periods (trading days)
-                # 1 week = 5 days, 3 weeks = 15 days, 5 weeks = 25 days
                 w1 = stats_data.tail(5)
                 w3 = stats_data.tail(15)
                 w5 = stats_data.tail(25)
@@ -94,7 +117,6 @@ if ticker:
                     "Value": [w5["High"].max(), w3["High"].max(), w1["High"].max(), w5["Close"].mean(), w1["Low"].min(), w3["Low"].min(), w5["Low"].min()]
                 })
                 
-                # Format values
                 stats_df["Value"] = stats_df["Value"].apply(lambda x: f"${x:,.2f}")
                 
                 st.dataframe(stats_df, hide_index=True, width='stretch')
@@ -109,7 +131,7 @@ if ticker:
             line=dict(color="blue")
         ))
         price_fig.update_layout(
-            title=f"{ticker} Intraday Price (Including Pre-market & After-hours)",
+            title=f"{ticker} Intraday Price (Including Pre-market, After-hours & Overnight)",
             xaxis_title="Time",
             yaxis_title="Price",
             showlegend=True
@@ -125,7 +147,7 @@ if ticker:
             marker=dict(color="grey")
         ))
         volume_fig.update_layout(
-            title=f"{ticker} Intraday Volume (Including Pre-market & After-hours)",
+            title=f"{ticker} Intraday Volume (Including Pre-market, After-hours & Overnight)",
             xaxis_title="Time",
             yaxis_title="Volume",
             showlegend=True
@@ -150,13 +172,13 @@ if tickers_list:
         try:
             yf_t = yf.Ticker(t)
 
-            # ✅ Today's intraday with pre/post
+            # Today's intraday with pre/post
             t_data = yf_t.history(period="1d", interval="1m", prepost=True)
 
-            # ✅ 60-day daily candles (for high/low range only)
+            # 60-day daily candles
             month_data = yf_t.history(period="2mo", interval="1d")
 
-            # ✅ Build yesterday's close from intraday (reliable)
+            # Build yesterday's close from intraday
             intraday = yf_t.history(period="10d", interval="5m", prepost=True)
 
             if not intraday.empty:
@@ -165,29 +187,24 @@ if tickers_list:
                 daily_from_intraday = regular.groupby(regular.index.date).last()
 
                 if len(daily_from_intraday) >= 2:
-                    prev_close = daily_from_intraday["Close"].iloc[-2]   # ✅ REAL yesterday
+                    prev_close = daily_from_intraday["Close"].iloc[-2]
                 else:
                     prev_close = None
             else:
                 prev_close = None
 
             if not t_data.empty and prev_close is not None and not month_data.empty:
-                # ✅ Latest price
                 latest = t_data["Close"].iloc[-1]
 
-                # ✅ Correct percent change
                 price_diff = latest - prev_close
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 color = "green" if percent_diff >= 0 else "red"
 
-                # ✅ 60-day high/low
                 high_60d = month_data["High"].max()
                 low_60d = month_data["Low"].min()
 
-                # ✅ Position in 60-day range
                 position = (latest - low_60d) / (high_60d - low_60d) * 100 if high_60d != low_60d else 50
 
-                # ✅ Range bar
                 bar_html = f"""
                 <div style='width:100%; height:6px; background:#ddd; border-radius:3px; margin-top:2px; margin-bottom:6px; position:relative;'>
                     <div style='position:absolute; left:{position}%; top:0; transform:translateX(-50%);
@@ -196,7 +213,6 @@ if tickers_list:
                 <small>60-day range: ${low_60d:.2f} – ${high_60d:.2f}</small>
                 """
 
-                # ✅ Display
                 st.sidebar.markdown(
                     f"**{t}**: ${latest:.2f} "
                     f"<span style='color:{color}'>({percent_diff:+.2f}%)</span>",
