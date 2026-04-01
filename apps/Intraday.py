@@ -23,7 +23,7 @@ if ticker:
     try:
         # Fetch stock data (5-minute interval for 5 days to capture extended hours)
         yf_ticker = yf.Ticker(ticker)
-        data = yf_ticker.history(period="5d", interval="5m", prepost=True)
+        data = yf_ticker.history(period="10d", interval="5m", prepost=True)
 
         if data.empty:
             st.error(f"No data found for {ticker}. Please check the symbol and try again.")
