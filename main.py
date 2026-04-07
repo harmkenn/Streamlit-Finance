@@ -15,7 +15,7 @@ sub_app_names = {
     'Whatif.py': 'Last Year',
     'OptionCall.py': 'Option Calls',
     'OptionWeek.py': 'Option Week',
-    'Predict.py': 'Predict',
+    'trump.py': 'Predict',
     'HighLow.py': 'High Low Strategy',
     'HighLowCompare.py': 'High Low MA Strategy',
     'HighLowBack.py': 'High Low Back Strategy',
