@@ -10,7 +10,7 @@ import yfinance as yf
 from textblob import TextBlob
 
 # ============================================================
-# CONFIG v1.4
+# CONFIG v1.5
 # ============================================================
 st.set_page_config(page_title="Post–Market Reaction Explorer", layout="wide")
 
@@ -187,23 +187,25 @@ def compute_reactions(
 
 
 # ============================================================
-# SIDEBAR
+# Setting
 # ============================================================
-st.header("Settings")
+col1,col2,col3,col4 = st.columns(4)
 
-# Define tickers
-ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
-#ticker_list = ["MSTY", "MAIN"]
-tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:7])
-
-lookahead_minutes = st.selectbox(
-    "Window after post to measure reaction (minutes)",
-    [5, 15, 30, 60, 240, 1440],
-    index=3,
-)
-
-start_date = st.date_input("Start date", value=datetime(2024, 1, 1))
-end_date = st.date_input("End date", value=datetime.now().date())
+with col1:
+    # Define tickers
+    ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+    #ticker_list = ["MSTY", "MAIN"]
+    tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:7])
+with col2:
+    lookahead_minutes = st.selectbox(
+        "Window after post to measure reaction (minutes)",
+        [5, 15, 30, 60, 240, 1440],
+        index=3,
+    )
+with col3:
+    start_date = st.date_input("Start date", value=datetime(2024, 1, 1))
+with col4:
+    end_date = st.date_input("End date", value=datetime.now().date())
 
 st.markdown("---")
 st.caption("This app performs descriptive analysis only. No predictions or trading signals.")
