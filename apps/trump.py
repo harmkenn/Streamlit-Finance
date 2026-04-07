@@ -147,11 +147,7 @@ def compute_reactions(posts_df, market_df, lookahead_minutes):
 # ============================================================
 st.sidebar.header("Settings")
 
-tickers = st.sidebar.multiselect(
-    "Market indices / ETFs",
-    ["SPY", "QQQ", "DIA", "^VIX"],
-    default=["SPY", "QQQ", "DIA", "^VIX"]
-)
+tickers = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 
 lookahead_minutes = st.sidebar.selectbox(
     "Window after post to measure reaction",
