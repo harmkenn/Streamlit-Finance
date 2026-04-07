@@ -10,7 +10,7 @@ import yfinance as yf
 from textblob import TextBlob
 
 # ============================================================
-# CONFIG v1.3
+# CONFIG v1.4
 # ============================================================
 st.set_page_config(page_title="Post–Market Reaction Explorer", layout="wide")
 
@@ -189,24 +189,24 @@ def compute_reactions(
 # ============================================================
 # SIDEBAR
 # ============================================================
-st.sidebar.header("Settings")
+st.header("Settings")
 
 # Define tickers
 ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
 #ticker_list = ["MSTY", "MAIN"]
 tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:7])
 
-lookahead_minutes = st.sidebar.selectbox(
+lookahead_minutes = st.selectbox(
     "Window after post to measure reaction (minutes)",
     [5, 15, 30, 60, 240, 1440],
     index=3,
 )
 
-start_date = st.sidebar.date_input("Start date", value=datetime(2024, 1, 1))
-end_date = st.sidebar.date_input("End date", value=datetime.now().date())
+start_date = st.date_input("Start date", value=datetime(2024, 1, 1))
+end_date = st.date_input("End date", value=datetime.now().date())
 
-st.sidebar.markdown("---")
-st.sidebar.caption("This app performs descriptive analysis only. No predictions or trading signals.")
+st.markdown("---")
+st.caption("This app performs descriptive analysis only. No predictions or trading signals.")
 
 # ============================================================
 # MAIN APP
