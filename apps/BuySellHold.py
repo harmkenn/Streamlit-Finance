@@ -3,7 +3,7 @@ import pandas as pd
 from yahooquery import Ticker
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-
+#
 st.set_page_config(layout="wide")
 st.title("Stock OHLC Plot with Indicators, Moving Averages, and Dividends")
 
@@ -75,11 +75,15 @@ if ticker:
                     'volume': 'Volume',
                     'dividends': 'Dividends'
                 })
+
                 data.set_index('Date', inplace=True)
 
-                # Fill missing dividends
+                # --- CRITICAL FIX FOR ^VIX AND NON-DIVIDEND TICKERS ---
+                if 'Dividends' not in data.columns:
+                    data['Dividends'] = 0.0
+
                 data['Dividends'] = data['Dividends'].fillna(0)
-                data['Yield'] = data['Dividends'] / data['Close'] * 100
+                data['Yield'] = (data['Dividends'] / data['Close'] * 100).fillna(0)
 
                 # --- Indicators ---
                 calc_data = data.rename(columns=str.lower).copy()
@@ -88,7 +92,6 @@ if ticker:
                 calc_data = calculate_atr(calc_data)
                 calc_data = calculate_volatility(calc_data)
 
-                # Merge indicator results back into main df
                 data['RSI'] = calc_data['RSI']
                 data['MFI'] = calc_data['MFI']
                 data['ATR'] = calc_data['ATR']
@@ -156,7 +159,7 @@ if ticker:
                     yaxis_title="Price",
                     xaxis_rangeslider_visible=False
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
 
                 # --- RSI + MFI Subplot ---
                 fig2 = go.Figure()
@@ -169,7 +172,7 @@ if ticker:
                 fig2.add_hline(y=20, line=dict(color="green", dash="dot"))
 
                 fig2.update_layout(title="RSI and MFI Indicators", xaxis_title="Date", yaxis_title="Value")
-                st.plotly_chart(fig2, width='stretch')
+                st.plotly_chart(fig2, use_container_width=True)
 
                 # --- Key Statistics ---
                 st.subheader("Key Statistics")
