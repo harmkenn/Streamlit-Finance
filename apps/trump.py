@@ -10,7 +10,7 @@ import yfinance as yf
 from textblob import TextBlob
 
 # ============================================================
-# CONFIG v1.2
+# CONFIG v1.3
 # ============================================================
 st.set_page_config(page_title="Post–Market Reaction Explorer", layout="wide")
 
@@ -191,11 +191,10 @@ def compute_reactions(
 # ============================================================
 st.sidebar.header("Settings")
 
-tickers = st.sidebar.multiselect(
-    "Market indices / ETFs",
-    ["SPY", "QQQ", "DIA", "^VIX"],
-    default=["SPY", "QQQ", "DIA", "^VIX"],
-)
+# Define tickers
+ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+#ticker_list = ["MSTY", "MAIN"]
+tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:7])
 
 lookahead_minutes = st.sidebar.selectbox(
     "Window after post to measure reaction (minutes)",
