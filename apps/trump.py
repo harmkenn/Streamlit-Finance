@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import os
 
 # ============================================================
-# CONFIG
+# CONFIG v1.1
 # ============================================================
 st.set_page_config(page_title="Post–Market Reaction Explorer", layout="wide")
 
@@ -109,10 +109,19 @@ def fetch_market_data(tickers, start, end):
         end=end + timedelta(days=1),
         interval="5m"
     )
+
+    # If MultiIndex (Open/High/Low/Close), select Close
     if isinstance(data.columns, pd.MultiIndex):
         data = data["Close"]
-    data = data.tz_localize("UTC", level=None, nonexistent="shift_forward", ambiguous="NaT", errors="ignore")
+
+    # Ensure index is timezone-aware UTC
+    if data.index.tz is None:
+        data.index = data.index.tz_localize("UTC")
+    else:
+        data.index = data.index.tz_convert("UTC")
+
     return data
+
 
 def sentiment_score(text):
     return TextBlob(str(text)).sentiment.polarity
