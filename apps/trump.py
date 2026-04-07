@@ -5,7 +5,7 @@ import yfinance as yf
 from textblob import TextBlob
 import seaborn as sns
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 
 # ============================================================
@@ -58,10 +58,14 @@ def save_local_posts(df):
 # Replace this with a real Truth Social fetcher later
 # ============================================================
 def fetch_new_truth_posts(latest_timestamp):
-    # TODO: Replace with real scraper/API
-    # For now, simulate a new post only if latest_timestamp is old
-    now = datetime.utcnow()
+    # Always use timezone-aware UTC
+    now = datetime.now(timezone.utc)
 
+    # Normalize latest_timestamp to timezone-aware UTC
+    if latest_timestamp is not None and latest_timestamp.tzinfo is None:
+        latest_timestamp = latest_timestamp.tz_localize("UTC")
+
+    # If no previous posts, or it's been > 1 hour, simulate a new post
     if latest_timestamp is None or (now - latest_timestamp).total_seconds() > 3600:
         return pd.DataFrame([
             {
@@ -69,7 +73,9 @@ def fetch_new_truth_posts(latest_timestamp):
                 "text": "Example new post for testing incremental updates."
             }
         ])
+
     return pd.DataFrame(columns=["timestamp", "text"])
+
 
 # ============================================================
 # MERGE OLD + NEW POSTS
