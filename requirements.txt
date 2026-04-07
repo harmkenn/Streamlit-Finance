@@ -11,5 +11,8 @@ plotly
 prophet
 yfinance
 mibian
+matplotlib
 scikit-learn
+seaborn
 statsmodels
+textblob
