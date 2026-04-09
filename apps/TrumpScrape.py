@@ -3,35 +3,26 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import quopri
 import re
-#1.7
-st.set_page_config(page_title="Factba.se / Truth Social HTML → CSV", layout="wide")
+#1.8
+st.set_page_config(page_title="Factba.se HTML → CSV", layout="wide")
 
 st.title("Factba.se / Truth Social HTML → CSV")
-st.write("Paste rendered HTML (from Elements panel or saved page) to extract posts into CSV.")
+st.write("Upload a **Webpage, Complete (.htm)** file saved from Chrome to extract posts into CSV.")
 
-st.markdown("---")
-
-html_input = st.text_area(
-    "Paste the HTML code here:",
-    height=400,
-    placeholder="Paste the HTML that contains the posts…"
-)
-
-extract_button = st.button("Extract Posts")
-
+uploaded_file = st.file_uploader("Upload the .htm file", type=["htm", "html"])
 
 def clean_text(t):
     if not t:
         return ""
     return re.sub(r"\s+", " ", t).strip()
 
-
-def decode_html(raw):
+def decode_html(raw_bytes):
+    """Decode quoted-printable if present."""
     try:
+        raw = raw_bytes.decode("utf-8", errors="ignore")
         return quopri.decodestring(raw).decode("utf-8", errors="ignore")
     except:
-        return raw
-
+        return raw_bytes.decode("utf-8", errors="ignore")
 
 def extract_timestamp(block):
     # Factba.se timestamp format
@@ -47,7 +38,6 @@ def extract_timestamp(block):
 
     return None
 
-
 def extract_post_text(block):
     html_block = block.select_one('[x-html="item.social.post_html"]')
     if html_block:
@@ -56,13 +46,11 @@ def extract_post_text(block):
             return clean_text(txt)
     return None
 
-
 def extract_url(block):
     link_el = block.select_one("a[href*='truthsocial.com']")
     if link_el and link_el.has_attr("href"):
         return link_el["href"]
     return None
-
 
 def extract_platform(block):
     if block.select_one('img[alt="Truth Social icon"]'):
@@ -71,14 +59,11 @@ def extract_platform(block):
         return "Twitter"
     return None
 
-
 def extract_posts_from_html(html):
-    decoded = decode_html(html)
-    soup = BeautifulSoup(decoded, "html.parser")
-
+    soup = BeautifulSoup(html, "html.parser")
     posts = []
 
-    # Each post is inside a <div class="block ...">
+    # Each post is inside a <div class="block mb-8 ...">
     for block in soup.select("div.block.mb-8"):
         timestamp = extract_timestamp(block)
         text = extract_post_text(block)
@@ -95,23 +80,22 @@ def extract_posts_from_html(html):
 
     return pd.DataFrame(posts)
 
+if uploaded_file:
+    raw_bytes = uploaded_file.read()
+    decoded_html = decode_html(raw_bytes)
 
-if extract_button:
-    if not html_input.strip():
-        st.error("Please paste HTML first.")
+    df = extract_posts_from_html(decoded_html)
+
+    if df.empty:
+        st.warning("No posts found. Make sure you uploaded a **Webpage, Complete (.htm)** file, not an MHTML file.")
     else:
-        df = extract_posts_from_html(html_input)
+        st.success(f"Extracted {len(df)} posts.")
+        st.dataframe(df, use_container_width=True)
 
-        if df.empty:
-            st.warning("No posts found. Make sure you pasted *rendered* HTML from the Elements panel.")
-        else:
-            st.success(f"Extracted {len(df)} posts.")
-            st.dataframe(df, use_container_width=True)
-
-            csv = df.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name="factbase_truth_posts.csv",
-                mime="text/csv",
-            )
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name="factbase_truth_posts.csv",
+            mime="text/csv",
+        )
