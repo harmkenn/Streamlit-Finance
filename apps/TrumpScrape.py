@@ -1,97 +1,160 @@
-import streamlit as st
+import os
+import io
 import pandas as pd
+import streamlit as st
 from bs4 import BeautifulSoup
-import quopri
-import re
-#2.1
-st.set_page_config(page_title="Factba.se HTML → CSV", layout="wide")
+#v2.2
+# ---------- CONFIG ----------
 
-st.title("Factba.se / Truth Social HTML → CSV")
-st.write("Upload a **Webpage, Complete (.htm)** file saved from Chrome to extract posts into CSV.")
+MASTER_CSV = "data/posts.csv"
+os.makedirs("data", exist_ok=True)
 
-uploaded_file = st.file_uploader("Upload the .htm file", type=["htm", "html"])
+# ---------- HELPERS ----------
 
-def clean_text(t):
-    if not t:
-        return ""
-    return re.sub(r"\s+", " ", t).strip()
+def load_master():
+    if os.path.exists(MASTER_CSV):
+        return pd.read_csv(MASTER_CSV)
+    return pd.DataFrame(columns=["timestamp", "platform", "url", "text"])
 
-def decode_html(raw_bytes):
-    """Decode quoted-printable if present."""
-    try:
-        raw = raw_bytes.decode("utf-8", errors="ignore")
-        return quopri.decodestring(raw).decode("utf-8", errors="ignore")
-    except:
-        return raw_bytes.decode("utf-8", errors="ignore")
+def save_master(df):
+    df.to_csv(MASTER_CSV, index=False)
 
 def extract_timestamp(block):
-    # Get all spans that have both classes
+    # Get all spans that have both classes: "hidden" and "md:inline"
     spans = block.find_all("span", class_=["hidden", "md:inline"])
     for span in spans:
         txt = span.get_text(strip=True)
-        # Skip the bullet, keep the real timestamp
+        # Skip bullet "•", keep real timestamp
         if "@" in txt and "ET" in txt:
             return txt
-    return None
-
-def extract_post_text(block):
-    html_block = block.select_one('[x-html="item.social.post_html"]')
-    if html_block:
-        txt = html_block.get_text(separator=" ", strip=True)
-        if txt:
-            return clean_text(txt)
-    return None
-
-def extract_url(block):
-    link_el = block.select_one("a[href*='truthsocial.com']")
-    if link_el and link_el.has_attr("href"):
-        return link_el["href"]
-    return None
+    return ""
 
 def extract_platform(block):
-    if block.select_one('img[alt="Truth Social icon"]'):
+    # Look for Truth Social / Twitter indicator in the header area
+    # First try explicit platform span
+    platform_span = block.find("span", string=lambda s: s and "Truth Social" in s)
+    if platform_span:
         return "Truth Social"
-    if block.select_one(".fa-x-twitter"):
+    # Fallback: check for X / Twitter icon context
+    x_icon = block.find("i", class_="fa-brands fa-x-twitter")
+    if x_icon:
         return "Twitter"
-    return None
+    return ""
 
-def extract_posts_from_html(html):
+def extract_url(block):
+    # Prefer the "View on Truth Social" or "View on X" link
+    link = block.find("a", string=lambda s: s and "View on" in s)
+    if link and link.get("href"):
+        return link["href"].strip()
+    # Fallback: any link that looks like a Truth Social or X URL
+    for a in block.find_all("a", href=True):
+        href = a["href"]
+        if "truthsocial.com" in href or "twitter.com" in href or "x.com" in href:
+            return href.strip()
+    return ""
+
+def extract_text(block):
+    # Prefer item.social.post_html container
+    post_div = block.find("div", attrs={"x-html": "item.social.post_html"})
+    if post_div:
+        return post_div.get_text(" ", strip=True)
+
+    # Fallback: generic text container used in your snippet
+    post_div = block.find("div", class_="text-sm")
+    if post_div:
+        return post_div.get_text(" ", strip=True)
+
+    return ""
+
+def extract_posts_from_html(html: str) -> pd.DataFrame:
     soup = BeautifulSoup(html, "html.parser")
-    posts = []
 
-    # Each post is inside a <div class="block mb-8 ...">
-    for block in soup.select("div.block.mb-8"):
+    # Each post block: div.block.mb-8.rounded-xl.border...
+    post_blocks = soup.find_all("div", class_="block mb-8 rounded-xl border border-[#2F3C4B]/20")
+
+    records = []
+    for block in post_blocks:
         timestamp = extract_timestamp(block)
-        text = extract_post_text(block)
-        url = extract_url(block)
         platform = extract_platform(block)
+        url = extract_url(block)
+        text = extract_text(block)
 
-        if timestamp or text or url:
-            posts.append({
-                "timestamp": timestamp,
-                "platform": platform,
-                "url": url,
-                "text": text
-            })
+        # Only keep rows that have at least a URL
+        if url:
+            records.append(
+                {
+                    "timestamp": timestamp,
+                    "platform": platform,
+                    "url": url,
+                    "text": text,
+                }
+            )
 
-    return pd.DataFrame(posts)
+    return pd.DataFrame(records, columns=["timestamp", "platform", "url", "text"])
 
-if uploaded_file:
-    raw_bytes = uploaded_file.read()
-    decoded_html = decode_html(raw_bytes)
+# ---------- STREAMLIT APP ----------
 
-    df = extract_posts_from_html(decoded_html)
+st.title("Trump Social Media HTML → CSV Archive")
 
-    if df.empty:
-        st.warning("No posts found. Make sure you uploaded a **Webpage, Complete (.htm)** file, not an MHTML file.")
-    else:
-        st.success(f"Extracted {len(df)} posts.")
-        st.dataframe(df, use_container_width=True)
+st.write("Upload one or more `.htm` files from Roll Call / Factba.se, and I'll extract posts, "
+         "merge them into a master CSV, and remove duplicates by URL.")
 
-        csv = df.to_csv(index=False).encode("utf-8")
+uploaded_files = st.file_uploader(
+    "Upload .htm files",
+    type=["htm", "html"],
+    accept_multiple_files=True
+)
+
+if uploaded_files:
+    all_new_rows = []
+
+    for f in uploaded_files:
+        st.subheader(f"File: {f.name}")
+        content = f.read()
+        try:
+            decoded = content.decode("utf-8", errors="ignore")
+        except Exception:
+            decoded = content.decode("latin-1", errors="ignore")
+
+        df_new = extract_posts_from_html(decoded)
+        st.write(f"Extracted {len(df_new)} posts from this file.")
+        st.dataframe(df_new.head())
+        all_new_rows.append(df_new)
+
+    if all_new_rows:
+        df_new_all = pd.concat(all_new_rows, ignore_index=True)
+        st.subheader("Combined new posts from this upload")
+        st.write(f"Total new extracted posts (before dedupe vs repository): {len(df_new_all)}")
+        st.dataframe(df_new_all.head())
+
+        # Load master, merge, dedupe
+        master = load_master()
+        before_count = len(master)
+
+        combined = pd.concat([master, df_new_all], ignore_index=True)
+        combined = combined.drop_duplicates(subset=["url"], keep="first")
+
+        added = len(combined) - before_count
+
+        save_master(combined)
+
+        st.success(f"Added {added} new posts to repository (duplicates removed).")
+        st.write(f"Repository now contains {len(combined)} total posts.")
+
+        # Offer download of just-this-upload and full master
         st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name="factbase_truth_posts.csv",
+            "Download this upload as CSV",
+            data=df_new_all.to_csv(index=False).encode("utf-8"),
+            file_name="this_upload_posts.csv",
             mime="text/csv",
         )
+
+        st.download_button(
+            "Download full repository CSV",
+            data=combined.to_csv(index=False).encode("utf-8"),
+            file_name="posts_master.csv",
+            mime="text/csv",
+        )
+
+else:
+    st.info("Upload one or more `.htm` files to begin.")
