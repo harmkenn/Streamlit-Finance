@@ -3,34 +3,30 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import quopri
 import re
-###
-st.set_page_config(page_title="HTML → CSV Extractor", layout="wide")
+# v1.6
+st.set_page_config(page_title="Factba.se / Truth Social HTML → CSV", layout="wide")
 
-st.title("HTML → CSV Extractor for Factba.se / Truth Social")
-st.write("Paste HTML from RollCall/Factba.se (even encoded) and extract posts into a CSV.")
+st.title("Factba.se / Truth Social HTML → CSV")
+st.write("Paste HTML (from page source, email, or Elements) and extract posts into a CSV.")
 
 st.markdown("---")
 
 html_input = st.text_area(
     "Paste the HTML code here:",
     height=400,
-    placeholder="Paste the HTML from the page or email source…"
+    placeholder="Paste the HTML that contains the posts…"
 )
 
 extract_button = st.button("Extract Posts")
 
 
-# ---------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------
-
-def clean_text(t):
+def clean_text(t: str | None) -> str:
     if not t:
         return ""
     return re.sub(r"\s+", " ", t).strip()
 
 
-def decode_html(raw):
+def decode_html(raw: str) -> str:
     """Decode quoted-printable HTML like class=3D, =E2=80=9C, =\n, etc."""
     try:
         decoded = quopri.decodestring(raw).decode("utf-8", errors="ignore")
@@ -39,14 +35,13 @@ def decode_html(raw):
         return raw
 
 
-def extract_timestamp(block):
+def extract_timestamp(block) -> str | None:
     """
     Extract timestamps like:
     <span class="hidden md:inline">April 8, 2026 @ 11:46 PM ET</span>
     """
-    # Tailwind class with colon must be escaped
     ts_el = block.select_one("span.hidden.md\\:inline")
-    if ts_el:
+    if ts_el and ts_el.get_text(strip=True):
         return clean_text(ts_el.get_text())
 
     # Fallback: any span containing "@" and "ET"
@@ -58,7 +53,7 @@ def extract_timestamp(block):
     return None
 
 
-def extract_post_text(block):
+def extract_post_text(block) -> str | None:
     """
     Extract the actual Truth Social post text.
     Factba.se embeds it inside:
@@ -70,52 +65,76 @@ def extract_post_text(block):
         if txt:
             return clean_text(txt)
 
-    # Fallback for older Factba.se
-    text_el = block.select_one(".fb-result-text")
+    # Fallback: text-only variant
+    text_el = block.select_one('[x-html="item.text"], .fb-result-text')
     if text_el:
         return clean_text(text_el.get_text(separator=" ", strip=True))
 
     return None
 
 
-def extract_posts_from_html(html):
+def extract_url(block) -> str | None:
+    """
+    Extract Truth Social URL like:
+    <a href="https://truthsocial.com/@realDonaldTrump/posts/...">View on Truth Social</a>
+    """
+    link_el = block.select_one("a[href*='truthsocial.com']")
+    if link_el and link_el.has_attr("href"):
+        return link_el["href"]
+    return None
+
+
+def extract_platform(block) -> str | None:
+    """
+    Try to infer platform (Truth Social / Twitter) from icon/text.
+    """
+    # Explicit platform text if present
+    plat_el = block.select_one(".fb-result-platform")
+    if plat_el:
+        return clean_text(plat_el.get_text())
+
+    # Look for Truth Social icon
+    if block.select_one('img[alt="Truth Social icon"]'):
+        return "Truth Social"
+
+    # Look for X/Twitter icon
+    if block.select_one(".fa-x-twitter") or block.select_one(".fa-brands.fa-x-twitter"):
+        return "Twitter"
+
+    return None
+
+
+def extract_posts_from_html(html: str) -> pd.DataFrame:
     decoded = decode_html(html)
     soup = BeautifulSoup(decoded, "html.parser")
 
     posts = []
 
-    # Look for any div that contains the post HTML
+    # Each post has a div with x-html="item.social.post_html"
     for html_block in soup.select('[x-html="item.social.post_html"]'):
         # Walk up a few levels to get the full post container
         block = html_block
-        for _ in range(3):
+        for _ in range(4):
             if block.parent:
                 block = block.parent
 
         timestamp = extract_timestamp(block)
-
-        platform_el = block.select_one(".fb-result-platform")
-        platform = clean_text(platform_el.get_text()) if platform_el else None
-
-        link_el = block.select_one("a[href*='truthsocial.com']")
-        url = link_el["href"] if link_el and link_el.has_attr("href") else None
-
         text = extract_post_text(block)
+        url = extract_url(block)
+        platform = extract_platform(block)
 
         if timestamp or text or url:
-            posts.append({
-                "timestamp": timestamp,
-                "platform": platform,
-                "url": url,
-                "text": text
-            })
+            posts.append(
+                {
+                    "timestamp": timestamp,
+                    "platform": platform,
+                    "url": url,
+                    "text": text,
+                }
+            )
 
     return pd.DataFrame(posts)
 
-
-# ---------------------------------------------------------
-# UI Logic
-# ---------------------------------------------------------
 
 if extract_button:
     if not html_input.strip():
@@ -124,7 +143,10 @@ if extract_button:
         df = extract_posts_from_html(html_input)
 
         if df.empty:
-            st.warning("No posts found in the HTML. Try pasting more of the page/source.")
+            st.warning(
+                "No posts found. Make sure the HTML includes the rendered blocks "
+                "with x-html=\"item.social.post_html\" and the timestamp span."
+            )
         else:
             st.success(f"Extracted {len(df)} posts.")
             st.dataframe(df, use_container_width=True)
@@ -133,6 +155,6 @@ if extract_button:
             st.download_button(
                 label="Download CSV",
                 data=csv,
-                file_name="extracted_posts.csv",
-                mime="text/csv"
+                file_name="factbase_truth_posts.csv",
+                mime="text/csv",
             )
