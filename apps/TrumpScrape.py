@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
-
+##
 st.set_page_config(page_title="HTML → CSV Extractor", layout="wide")
 
 st.title("HTML → CSV Extractor for Truth Social Posts")
@@ -60,6 +60,7 @@ def extract_posts_from_html(html):
             })
 
     return pd.DataFrame(posts)
+
 
 
 
