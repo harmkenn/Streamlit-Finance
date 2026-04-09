@@ -3,7 +3,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import quopri
 import re
-#2.0
+#2.1
 st.set_page_config(page_title="Factba.se HTML → CSV", layout="wide")
 
 st.title("Factba.se / Truth Social HTML → CSV")
@@ -25,17 +25,13 @@ def decode_html(raw_bytes):
         return raw_bytes.decode("utf-8", errors="ignore")
 
 def extract_timestamp(block):
-    # Match both classes exactly as BeautifulSoup sees them
-    ts_el = block.find("span", class_=["hidden", "md:inline"])
-    if ts_el and ts_el.get_text(strip=True):
-        return ts_el.get_text(strip=True)
-
-    # Fallback: any span containing @ and ET
-    for span in block.find_all("span"):
+    # Get all spans that have both classes
+    spans = block.find_all("span", class_=["hidden", "md:inline"])
+    for span in spans:
         txt = span.get_text(strip=True)
+        # Skip the bullet, keep the real timestamp
         if "@" in txt and "ET" in txt:
             return txt
-
     return None
 
 def extract_post_text(block):
