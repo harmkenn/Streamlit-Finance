@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
-#
+
 st.set_page_config(page_title="HTML → CSV Extractor", layout="wide")
 
 st.title("HTML → CSV Extractor for Truth Social Posts")
@@ -23,30 +23,36 @@ def clean_text(t):
         return ""
     return re.sub(r"\s+", " ", t).strip()
 
+def extract_timestamp(block):
+    # New Factba.se format
+    ts_el = block.select_one("span.hidden.md\\:inline")
+    if ts_el:
+        return clean_text(ts_el.get_text())
+
+    # Older format
+    ts_el = block.select_one(".fb-result-date")
+    if ts_el:
+        return clean_text(ts_el.get_text())
+
+    return None
+
 def extract_posts_from_html(html):
     soup = BeautifulSoup(html, "html.parser")
     posts = []
 
-    # Each post block is inside a div.fb-result or similar
     for block in soup.select("div.fb-result, div.block"):
-        # Platform
+        timestamp = extract_timestamp(block)
+
         platform_el = block.select_one(".fb-result-platform")
         platform = clean_text(platform_el.get_text()) if platform_el else None
 
-        # Timestamp
-        date_el = block.select_one(".fb-result-date")
-        timestamp = clean_text(date_el.get_text()) if date_el else None
-
-        # URL
         link_el = block.select_one("a[href*='truthsocial.com']")
         url = link_el["href"] if link_el else None
 
-        # Post text (inside x-html or fallback)
         text_el = block.select_one("[x-html], .fb-result-text")
         text = clean_text(text_el.get_text()) if text_el else None
 
-        # Only add if we found meaningful content
-        if text or timestamp or url:
+        if timestamp or text or url:
             posts.append({
                 "timestamp": timestamp,
                 "platform": platform,
