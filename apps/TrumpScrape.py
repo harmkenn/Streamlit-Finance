@@ -32,27 +32,61 @@ async def scrape_page_async(page_number: int):
             
             posts = []
             
-            # Look for post items (updated selectors for current structure)
-            for item in soup.select("div.block[class*='border']"):
+            # Find all <p> tags that contain post text
+            p_tags = soup.find_all("p")
+            
+            for p_tag in p_tags:
                 try:
-                    # Extract text content
-                    text_el = item.select_one("p, div[class*='text']")
-                    text = text_el.get_text(strip=True) if text_el else None
+                    # Extract text from the <p> tag
+                    text = p_tag.get_text(strip=True)
                     
-                    # Extract link
-                    link_el = item.select_one("a[href*='truth'], a[href*='twitter'], a[href*='facebook']")
-                    link = link_el.get("href") if link_el else None
+                    # Only process if the text is substantial enough
+                    if not text or len(text) < 20:
+                        continue
                     
-                    # Extract date (look for time element or date text)
-                    date_el = item.select_one("time, [class*='date'], [class*='time']")
-                    timestamp = date_el.get_text(strip=True) if date_el else None
+                    # Find the parent container (go up from the p tag)
+                    item = p_tag.parent
+                    while item and item.name != "main" and len(item.get("class", [])) == 0:
+                        item = item.parent
                     
-                    if text:  # Only add if we found text
-                        posts.append({
-                            "timestamp": timestamp,
-                            "text": text,
-                            "url": link,
-                        })
+                    if not item:
+                        item = p_tag.parent
+                    
+                    # Extract link - look in the parent container
+                    link = None
+                    link_el = item.find("a", href=True) if item else None
+                    if link_el:
+                        link = link_el.get("href")
+                    
+                    # Extract date/time - look in the parent container
+                    timestamp = None
+                    
+                    # Try to find time element first
+                    date_el = item.find("time") if item else None
+                    
+                    # If not found, look for span tags that might contain date info
+                    if not date_el and item:
+                        # Look for span tags with datetime or title attributes
+                        for span in item.find_all("span"):
+                            if span.get("datetime") or span.get("title"):
+                                date_el = span
+                                break
+                        
+                        # If still not found, get all spans and look for date-like patterns
+                        if not date_el:
+                            all_spans = item.find_all("span")
+                            # Usually the date is in one of the later spans
+                            if len(all_spans) >= 5:
+                                date_el = all_spans[4]  # Often around the 5th span based on your XPath
+                    
+                    if date_el:
+                        timestamp = date_el.get("datetime") or date_el.get("title") or date_el.get_text(strip=True)
+                    
+                    posts.append({
+                        "timestamp": timestamp,
+                        "text": text,
+                        "url": link,
+                    })
                 except Exception as e:
                     st.warning(f"Error parsing item: {e}")
                     continue
@@ -107,7 +141,7 @@ max_pages = st.number_input(
     "How many pages to scrape?",
     min_value=1,
     max_value=200,
-    value=10,
+    value=1,
     step=1
 )
 
