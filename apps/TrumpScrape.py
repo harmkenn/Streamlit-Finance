@@ -49,8 +49,7 @@ def extract_posts_from_html(html):
         link_el = block.select_one("a[href*='truthsocial.com']")
         url = link_el["href"] if link_el else None
 
-        text_el = block.select_one("[x-html], .fb-result-text")
-        text = clean_text(text_el.get_text()) if text_el else None
+        text = extract_post_text(block)
 
         if timestamp or text or url:
             posts.append({
@@ -61,6 +60,7 @@ def extract_posts_from_html(html):
             })
 
     return pd.DataFrame(posts)
+
 
 
 if extract_button:
