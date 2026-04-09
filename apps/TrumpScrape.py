@@ -3,7 +3,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import quopri
 import re
-#1.9
+#2.0
 st.set_page_config(page_title="Factba.se HTML → CSV", layout="wide")
 
 st.title("Factba.se / Truth Social HTML → CSV")
@@ -25,7 +25,7 @@ def decode_html(raw_bytes):
         return raw_bytes.decode("utf-8", errors="ignore")
 
 def extract_timestamp(block):
-    # Match both classes: "hidden" and "md:inline"
+    # Match both classes exactly as BeautifulSoup sees them
     ts_el = block.find("span", class_=["hidden", "md:inline"])
     if ts_el and ts_el.get_text(strip=True):
         return ts_el.get_text(strip=True)
@@ -37,7 +37,6 @@ def extract_timestamp(block):
             return txt
 
     return None
-
 
 def extract_post_text(block):
     html_block = block.select_one('[x-html="item.social.post_html"]')
