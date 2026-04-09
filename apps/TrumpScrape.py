@@ -1,71 +1,98 @@
 import streamlit as st
 import pandas as pd
-import requests
 from bs4 import BeautifulSoup
 import time
+import asyncio
+from playwright.async_api import async_playwright
 
 # ---------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------
-st.set_page_config(page_title="Truth Social Scraper", layout="wide")
+st.set_page_config(page_title="Trump Posts Scraper", layout="wide")
 
 BASE_URL = "https://rollcall.com/factbase/trump/topic/social/?platform=all&sort=date&sort_order=desc&page={}"
-
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
 
 # ---------------------------------------------------------
 # SCRAPER FUNCTIONS
 # ---------------------------------------------------------
-def scrape_page(page_number: int):
-    """Scrape a single page of posts."""
+async def scrape_page_async(page_number: int):
+    """Scrape a single page using Playwright (handles JavaScript rendering)."""
     url = BASE_URL.format(page_number)
-    r = requests.get(url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
+    
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page()
+        
+        try:
+            await page.goto(url, wait_until="networkidle")
+            await page.wait_for_timeout(2000)  # Extra wait for dynamic content
+            
+            html = await page.content()
+            soup = BeautifulSoup(html, "html.parser")
+            
+            posts = []
+            
+            # Look for post items (updated selectors for current structure)
+            for item in soup.select("div.block[class*='border']"):
+                try:
+                    # Extract text content
+                    text_el = item.select_one("p, div[class*='text']")
+                    text = text_el.get_text(strip=True) if text_el else None
+                    
+                    # Extract link
+                    link_el = item.select_one("a[href*='truth'], a[href*='twitter'], a[href*='facebook']")
+                    link = link_el.get("href") if link_el else None
+                    
+                    # Extract date (look for time element or date text)
+                    date_el = item.select_one("time, [class*='date'], [class*='time']")
+                    timestamp = date_el.get_text(strip=True) if date_el else None
+                    
+                    if text:  # Only add if we found text
+                        posts.append({
+                            "timestamp": timestamp,
+                            "text": text,
+                            "url": link,
+                        })
+                except Exception as e:
+                    st.warning(f"Error parsing item: {e}")
+                    continue
+            
+            return posts
+            
+        finally:
+            await browser.close()
 
-    posts = []
 
-    for item in soup.select("div.fb-result"):
-        text_el = item.select_one(".fb-result-text")
-        date_el = item.select_one(".fb-result-date")
-        link_el = item.select_one("a")
-        platform_el = item.select_one(".fb-result-platform")
-
-        text = text_el.get_text(strip=True) if text_el else None
-        timestamp = date_el.get_text(strip=True) if date_el else None
-        url = link_el["href"] if link_el else None
-        platform = platform_el.get_text(strip=True) if platform_el else None
-
-        posts.append({
-            "timestamp": timestamp,
-            "text": text,
-            "url": url,
-            "platform": platform
-        })
-
-    return posts
+def scrape_page(page_number: int):
+    """Wrapper to run async scraping in Streamlit."""
+    try:
+        return asyncio.run(scrape_page_async(page_number))
+    except Exception as e:
+        st.error(f"Scraping error on page {page_number}: {e}")
+        return []
 
 
 def scrape_all_pages(max_pages: int, delay: float = 1.0):
     """Scrape multiple pages with progress bar."""
     all_posts = []
-    progress = st.progress(0)
+    progress_bar = st.progress(0)
+    status_text = st.empty()
 
     for page in range(1, max_pages + 1):
-        progress.progress(page / max_pages)
-        st.write(f"Scraping page {page}…")
+        progress_bar.progress(page / max_pages)
+        status_text.write(f"Scraping page {page}…")
 
         posts = scrape_page(page)
         if not posts:
-            st.write("No more posts found — stopping early.")
+            status_text.write(f"No posts found on page {page} — stopping early.")
             break
 
         all_posts.extend(posts)
+        status_text.write(f"Found {len(posts)} posts on page {page}. Total: {len(all_posts)}")
         time.sleep(delay)
 
-    progress.progress(1.0)
-    return pd.DataFrame(all_posts)
+    progress_bar.progress(1.0)
+    return pd.DataFrame(all_posts) if all_posts else pd.DataFrame()
 
 
 # ---------------------------------------------------------

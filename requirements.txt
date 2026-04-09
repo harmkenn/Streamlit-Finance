@@ -16,3 +16,5 @@ scikit-learn
 seaborn
 statsmodels
 textblob
+playwright
+beautifulsoup4
