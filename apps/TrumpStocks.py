@@ -5,7 +5,7 @@ from datetime import timedelta
 
 
 # ---------------------------------------------------------
-# Helpers v1.4 — includes timestamp cleaning
+# Helpers v2.0 — timestamp cleaning + detection
 # ---------------------------------------------------------
 
 def detect_timestamp_column(df):
@@ -36,8 +36,6 @@ def clean_timestamp(ts):
         return pd.NaT
 
     ts = str(ts)
-
-    # Remove " @ " and "ET"
     ts = ts.replace(" @ ", " ")
     ts = ts.replace("ET", "")
     ts = ts.strip()
@@ -71,11 +69,11 @@ def fetch_daily_prices(tickers, start_date, end_date):
 # Streamlit UI
 # ---------------------------------------------------------
 
-st.title("Trump Tweets + Daily Market Prices (yfinance)")
+st.title("Trump Tweets + Daily Market Prices + ML Features")
 
 st.write(
     "Upload a CSV of Trump tweets, and I'll match them with **daily prices** "
-    "for **TQQQ, UPRO, UDOW, XOP, and ^VIX** using yfinance."
+    "for **TQQQ, UPRO, UDOW, XOP, and ^VIX**, then build an **ML-ready dataset**."
 )
 
 uploaded = st.file_uploader("Upload Trump Tweet CSV", type=["csv"])
@@ -130,6 +128,9 @@ if uploaded:
         st.subheader("Merged Tweet + Price Dataset")
         st.dataframe(merged.head())
 
+        # Save merged dataset in session_state for ML step
+        st.session_state["merged"] = merged
+
         # Download merged CSV
         csv = merged.to_csv(index=False).encode("utf-8")
         st.download_button(
@@ -139,13 +140,21 @@ if uploaded:
             "text/csv"
         )
 
+
 # ---------------------------------------------------------
-# ML FEATURE ENGINEERING (v1.0)
+# ML FEATURE ENGINEERING
 # ---------------------------------------------------------
 
 st.subheader("Generate ML Features")
 
 if st.button("Build ML Dataset"):
+
+    if "merged" not in st.session_state:
+        st.error("Please fetch daily prices first.")
+        st.stop()
+
+    merged = st.session_state["merged"].copy()
+
     with st.spinner("Building ML features…"):
 
         ml = merged.copy()
@@ -215,4 +224,3 @@ if st.button("Build ML Dataset"):
             "ml_dataset.csv",
             "text/csv"
         )
-
