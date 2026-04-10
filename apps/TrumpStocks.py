@@ -9,7 +9,7 @@ from alpaca.data.timeframe import TimeFrame
 
 import yfinance as yf
 
-#1.0
+#1.1
 def parse_timestamp_column(df):
     """
     Try to find and parse a timestamp column in the uploaded Trump CSV.
