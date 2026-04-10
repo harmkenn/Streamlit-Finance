@@ -1,160 +1,118 @@
 import streamlit as st
 import pandas as pd
-from datetime import timedelta
-from dateutil import parser
-
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
-
 import yfinance as yf
+from datetime import timedelta
 
-#1.1
-def parse_timestamp_column(df):
+
+# ---------------------------------------------------------
+# Helpers v1.2
+# ---------------------------------------------------------
+
+def detect_timestamp_column(df):
     """
-    Try to find and parse a timestamp column in the uploaded Trump CSV.
-    Assumes a column name like 'timestamp', 'date', 'time', etc.
+    Auto-detect a timestamp column in the uploaded CSV.
+    Looks for columns containing 'date', 'time', or 'stamp'.
     """
-    candidate_cols = [c for c in df.columns if "time" in c.lower() or "date" in c.lower()]
-    if not candidate_cols:
-        raise ValueError("Could not find a timestamp/date column in the uploaded file.")
+    candidates = [c for c in df.columns if any(k in c.lower() for k in ["date", "time", "stamp"])]
+    if not candidates:
+        raise ValueError("No timestamp-like column found. Expected something like 'timestamp' or 'date'.")
 
-    # Prefer 'timestamp' if present
-    for name in ["timestamp", "date", "datetime"]:
-        for c in candidate_cols:
-            if c.lower() == name:
-                ts_col = c
-                break
-        else:
-            continue
-        break
-    else:
-        ts_col = candidate_cols[0]
+    # Prefer common names
+    for preferred in ["timestamp", "date", "datetime", "created_at"]:
+        for c in candidates:
+            if c.lower() == preferred:
+                return c
 
-    df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
-    if df[ts_col].isna().all():
-        raise ValueError(f"Could not parse any valid datetimes from column '{ts_col}'.")
-
-    return df, ts_col
+    return candidates[0]
 
 
-def get_alpaca_daily_prices(api_key, api_secret, symbols, start_date, end_date):
-    client = StockHistoricalDataClient(api_key, api_secret)
-
-    req = StockBarsRequest(
-        symbol_or_symbols=symbols,
-        timeframe=TimeFrame.Day,
+def fetch_daily_prices(tickers, start_date, end_date):
+    """
+    Fetch daily OHLCV for a list of tickers using yfinance.
+    Returns a DataFrame with columns like 'TQQQ', 'UPRO', etc.
+    """
+    data = yf.download(
+        tickers,
         start=start_date,
         end=end_date,
+        interval="1d",
+        auto_adjust=True,
+        progress=False
     )
 
-    bars = client.get_stock_bars(req)
-    df = bars.df  # MultiIndex: (symbol, timestamp)
+    # yfinance returns a multi-index (OHLCV). We only want Close.
+    if isinstance(data.columns, pd.MultiIndex):
+        data = data["Close"]
 
-    # Flatten to wide format: one column per symbol, index = date
-    df = df.reset_index()
-    df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.date
-    price_pivot = df.pivot_table(
-        index="timestamp",
-        columns="symbol",
-        values="close",
-        aggfunc="last",
-    ).sort_index()
-
-    price_pivot.index = pd.to_datetime(price_pivot.index)
-    return price_pivot
+    data.index = pd.to_datetime(data.index)
+    return data
 
 
-def get_vix_daily(start_date, end_date):
-    vix = yf.download("^VIX", start=start_date, end=end_date, interval="1d")
-    if vix.empty:
-        return pd.DataFrame()
-    vix = vix[["Adj Close"]].rename(columns={"Adj Close": "^VIX"})
-    vix.index = vix.index.tz_localize(None)
-    return vix
+# ---------------------------------------------------------
+# Streamlit UI
+# ---------------------------------------------------------
 
+st.title("Trump Tweets + Daily Market Prices (yfinance)")
 
-def main():
-    st.title("Trump Tweets + Market Data (Daily)")
+st.write(
+    "Upload a CSV of Trump tweets, and I'll match them with **daily prices** "
+    "for **TQQQ, UPRO, UDOW, XOP, and ^VIX** using yfinance."
+)
 
-    st.markdown(
-        "Upload your Trump tweet CSV, and I’ll pull **daily prices** for "
-        "`TQQQ, UPRO, UDOW, XOP` from **Alpaca**, plus `^VIX` from **yfinance**."
-    )
+uploaded = st.file_uploader("Upload Trump Tweet CSV", type=["csv"])
 
-    st.sidebar.header("Alpaca Credentials")
-    api_key = st.sidebar.text_input("Alpaca API Key", type="password")
-    api_secret = st.sidebar.text_input("Alpaca API Secret", type="password")
+if uploaded:
+    df = pd.read_csv(uploaded)
 
-    uploaded_file = st.file_uploader("Upload Trump tweets CSV", type=["csv"])
+    st.subheader("Preview of Uploaded Tweets")
+    st.dataframe(df.head())
 
-    if uploaded_file is not None:
-        try:
-            tweets_df = pd.read_csv(uploaded_file)
-        except Exception as e:
-            st.error(f"Error reading CSV: {e}")
-            return
+    # Detect timestamp column
+    try:
+        ts_col = detect_timestamp_column(df)
+    except ValueError as e:
+        st.error(str(e))
+        st.stop()
 
-        st.write("Preview of uploaded tweets:")
-        st.dataframe(tweets_df.head())
+    st.success(f"Detected timestamp column: **{ts_col}**")
 
-        try:
-            tweets_df, ts_col = parse_timestamp_column(tweets_df)
-        except ValueError as e:
-            st.error(str(e))
-            return
+    # Convert to datetime
+    df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
+    df = df.dropna(subset=[ts_col])
 
-        min_ts = tweets_df[ts_col].min()
-        max_ts = tweets_df[ts_col].max()
+    min_date = df[ts_col].min().date()
+    max_date = df[ts_col].max().date()
 
-        if pd.isna(min_ts) or pd.isna(max_ts):
-            st.error("Could not determine a valid date range from the tweet timestamps.")
-            return
+    # Pad the range slightly
+    start_date = min_date - timedelta(days=2)
+    end_date = max_date + timedelta(days=2)
 
-        # Pad the range a bit
-        start_date = (min_ts - timedelta(days=2)).date()
-        end_date = (max_ts + timedelta(days=2)).date()
+    st.write(f"**Tweet date range:** {min_date} → {max_date}")
+    st.write(f"**Fetching market data for:** {start_date} → {end_date}")
 
-        st.markdown(
-            f"**Detected tweet date range:** {min_ts} → {max_ts}  \n"
-            f"**Fetching market data for:** {start_date} → {end_date}"
+    if st.button("Fetch Daily Prices"):
+        with st.spinner("Fetching daily prices from yfinance…"):
+            tickers = ["TQQQ", "UPRO", "UDOW", "XOP", "^VIX"]
+            prices = fetch_daily_prices(tickers, start_date, end_date)
+
+        st.subheader("Daily Price Data (Close)")
+        st.dataframe(prices.tail())
+
+        # Merge tweets + prices by date
+        df["date"] = df[ts_col].dt.date
+        prices["date"] = prices.index.date
+
+        merged = df.merge(prices, on="date", how="left")
+
+        st.subheader("Merged Tweet + Price Dataset")
+        st.dataframe(merged.head())
+
+        # Download merged CSV
+        csv = merged.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download Merged CSV",
+            csv,
+            "tweets_with_daily_prices.csv",
+            "text/csv"
         )
 
-        if not api_key or not api_secret:
-            st.warning("Enter your Alpaca API key and secret in the sidebar to fetch prices.")
-            return
-
-        if st.button("Fetch Daily Prices"):
-            with st.spinner("Fetching daily prices from Alpaca and yfinance..."):
-                try:
-                    symbols = ["TQQQ", "UPRO", "UDOW", "XOP"]
-                    alpaca_prices = get_alpaca_daily_prices(
-                        api_key, api_secret, symbols, start_date, end_date
-                    )
-                except Exception as e:
-                    st.error(f"Error fetching data from Alpaca: {e}")
-                    return
-
-                vix = get_vix_daily(start_date, end_date)
-
-                # Merge Alpaca + VIX
-                if not vix.empty:
-                    combined = alpaca_prices.join(vix, how="outer")
-                else:
-                    combined = alpaca_prices
-
-                combined = combined.sort_index()
-
-                st.subheader("Daily Price Data")
-                st.dataframe(combined.tail(20))
-
-                csv = combined.to_csv(index=True).encode("utf-8")
-                st.download_button(
-                    label="Download combined daily prices as CSV",
-                    data=csv,
-                    file_name="trump_markets_daily.csv",
-                    mime="text/csv",
-                )
-
-
-main()
