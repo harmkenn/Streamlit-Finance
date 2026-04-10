@@ -5,7 +5,7 @@ from datetime import timedelta
 
 
 # ---------------------------------------------------------
-# Helpers v1.3 — includes timestamp cleaning
+# Helpers v1.4 — includes timestamp cleaning
 # ---------------------------------------------------------
 
 def detect_timestamp_column(df):
@@ -138,3 +138,81 @@ if uploaded:
             "tweets_with_daily_prices.csv",
             "text/csv"
         )
+
+# ---------------------------------------------------------
+# ML FEATURE ENGINEERING (v1.0)
+# ---------------------------------------------------------
+
+st.subheader("Generate ML Features")
+
+if st.button("Build ML Dataset"):
+    with st.spinner("Building ML features…"):
+
+        ml = merged.copy()
+
+        # Ensure datetime
+        ml["timestamp"] = pd.to_datetime(ml["timestamp"])
+        ml["date"] = pd.to_datetime(ml["date"])
+
+        # -----------------------------
+        # Sentiment features
+        # -----------------------------
+        from textblob import TextBlob
+
+        def get_sentiment(text):
+            return TextBlob(str(text)).sentiment.polarity
+
+        ml["sentiment"] = ml["text"].apply(get_sentiment)
+
+        # Tweet intensity
+        ml["exclamation_count"] = ml["text"].str.count("!")
+        ml["all_caps_ratio"] = ml["text"].apply(
+            lambda t: sum(1 for c in str(t) if c.isupper()) / max(len(str(t)), 1)
+        )
+
+        # -----------------------------
+        # Market return features
+        # -----------------------------
+        price_cols = ["TQQQ", "UDOW", "UPRO", "XOP", "^VIX"]
+
+        for col in price_cols:
+            ml[f"{col}_ret"] = ml[col].pct_change()
+
+        # Next‑day returns (prediction target)
+        for col in price_cols:
+            ml[f"{col}_next_ret"] = ml[f"{col}_ret"].shift(-1)
+
+        # Lagged returns
+        for col in price_cols:
+            ml[f"{col}_ret_lag1"] = ml[f"{col}_ret"].shift(1)
+            ml[f"{col}_ret_lag2"] = ml[f"{col}_ret"].shift(2)
+            ml[f"{col}_ret_lag3"] = ml[f"{col}_ret"].shift(3)
+
+        # -----------------------------
+        # Aggregate by day
+        # -----------------------------
+        daily = ml.groupby("date").agg({
+            "sentiment": "mean",
+            "exclamation_count": "sum",
+            "all_caps_ratio": "mean",
+            **{f"{col}_ret": "first" for col in price_cols},
+            **{f"{col}_next_ret": "first" for col in price_cols},
+            **{f"{col}_ret_lag1": "first" for col in price_cols},
+            **{f"{col}_ret_lag2": "first" for col in price_cols},
+            **{f"{col}_ret_lag3": "first" for col in price_cols},
+        })
+
+        daily = daily.dropna()
+
+        st.success("ML dataset created successfully!")
+        st.dataframe(daily.head())
+
+        # Download ML dataset
+        csv_ml = daily.to_csv().encode("utf-8")
+        st.download_button(
+            "Download ML Dataset",
+            csv_ml,
+            "ml_dataset.csv",
+            "text/csv"
+        )
+
