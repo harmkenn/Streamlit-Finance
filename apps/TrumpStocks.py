@@ -5,7 +5,7 @@ from datetime import timedelta
 
 
 # ---------------------------------------------------------
-# Helpers v1.2
+# Helpers v1.3 — includes timestamp cleaning
 # ---------------------------------------------------------
 
 def detect_timestamp_column(df):
@@ -24,6 +24,25 @@ def detect_timestamp_column(df):
                 return c
 
     return candidates[0]
+
+
+def clean_timestamp(ts):
+    """
+    Convert strings like:
+        'April 8, 2026 @ 10:56 PM ET'
+    into a pandas-parsable datetime.
+    """
+    if pd.isna(ts):
+        return pd.NaT
+
+    ts = str(ts)
+
+    # Remove " @ " and "ET"
+    ts = ts.replace(" @ ", " ")
+    ts = ts.replace("ET", "")
+    ts = ts.strip()
+
+    return pd.to_datetime(ts, errors="coerce")
 
 
 def fetch_daily_prices(tickers, start_date, end_date):
@@ -76,9 +95,13 @@ if uploaded:
 
     st.success(f"Detected timestamp column: **{ts_col}**")
 
-    # Convert to datetime
-    df[ts_col] = pd.to_datetime(df[ts_col], errors="coerce")
+    # Clean + convert timestamps
+    df[ts_col] = df[ts_col].apply(clean_timestamp)
     df = df.dropna(subset=[ts_col])
+
+    if df.empty:
+        st.error("All timestamps failed to parse. Check the timestamp format.")
+        st.stop()
 
     min_date = df[ts_col].min().date()
     max_date = df[ts_col].max().date()
@@ -115,4 +138,3 @@ if uploaded:
             "tweets_with_daily_prices.csv",
             "text/csv"
         )
-
