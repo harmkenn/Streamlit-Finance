@@ -18,3 +18,5 @@ statsmodels
 textblob
 playwright
 beautifulsoup4
+alpaca-py
+python-dateutil
