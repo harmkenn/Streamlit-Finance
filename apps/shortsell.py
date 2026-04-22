@@ -32,7 +32,6 @@ if data is None or data.empty:
     st.error("No data returned for this ticker.")
     st.stop()
 
-# Ensure correct structure
 if "Close" not in data.columns or "Volume" not in data.columns:
     st.error("Unexpected data format from yfinance.")
     st.stop()
@@ -126,20 +125,29 @@ fig = go.Figure(data=[go.Candlestick(
     close=data['Close'],
     name="Price"
 )])
-fig.add_trace(go.Scatter(x=data.index, y=data['MA10'], line=dict(color='blue'), name="MA10"))
-fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], line=dict(color='red'), name="MA20"))
+if "MA10" in data.columns:
+    fig.add_trace(go.Scatter(x=data.index, y=data['MA10'], line=dict(color='blue'), name="MA10"))
+if "MA20" in data.columns:
+    fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], line=dict(color='red'), name="MA20"))
 st.plotly_chart(fig, use_container_width=True)
 
 # RSI
 st.subheader("📉 RSI Indicator")
-st.line_chart(data[['RSI']])
+if "RSI" in data.columns and not data["RSI"].dropna().empty:
+    st.line_chart(data[["RSI"]])
+else:
+    st.warning("RSI data not available yet.")
 
 # Volume
 st.subheader("📊 Volume")
-vol_fig = go.Figure()
-vol_fig.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume"))
-vol_fig.add_trace(go.Scatter(x=data.index, y=data['VolAvg'], line=dict(color='orange'), name="10-day Avg"))
-st.plotly_chart(vol_fig, use_container_width=True)
+if "Volume" in data.columns and not data["Volume"].dropna().empty:
+    vol_fig = go.Figure()
+    vol_fig.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume"))
+    if "VolAvg" in data.columns and not data["VolAvg"].dropna().empty:
+        vol_fig.add_trace(go.Scatter(x=data.index, y=data['VolAvg'], line=dict(color='orange'), name="10-day Avg"))
+    st.plotly_chart(vol_fig, use_container_width=True)
+else:
+    st.warning("Volume data not available.")
 
 # -----------------------------
 # Benchmark Comparison
