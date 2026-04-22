@@ -22,3 +22,4 @@ alpaca-py
 python-dateutil
 transformers
 torch
+torchvision
