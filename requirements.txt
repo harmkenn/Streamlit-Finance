@@ -21,3 +21,4 @@ beautifulsoup4
 alpaca-py
 python-dateutil
 transformers
+torch
