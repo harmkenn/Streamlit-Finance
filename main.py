@@ -13,14 +13,7 @@ sub_app_names = {
     'BuySellHold.py': 'Buy Sell or Hold',
     'Compare.py': 'Compare',
     'Whatif.py': 'Last Year',
-    'OptionCall.py': 'Option Calls',
-    'OptionWeek.py': 'Option Week',
-    'TrumpStocks.py': 'Trump Stocks',
-    'TrumpScrape.py': 'Trump Scrape',
-    'HighLow.py': 'High Low Strategy',
-    'HighLowCompare.py': 'High Low MA Strategy',
-    'HighLowBack.py': 'High Low Back Strategy',
-    'BankStatement.py': 'Bank Statements'
+    'shortsell.py': 'Trend',
 }
 
 # Get a list of .py files from the SubApps folder
