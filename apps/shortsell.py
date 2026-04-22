@@ -129,9 +129,9 @@ fig = go.Figure(data=[go.Candlestick(
     close=data['Close'],
     name="Price"
 )])
-if "MA10" in data.columns:
+if "MA10" in data.columns and not data["MA10"].dropna().empty:
     fig.add_trace(go.Scatter(x=data.index, y=data['MA10'], line=dict(color='blue'), name="MA10"))
-if "MA20" in data.columns:
+if "MA20" in data.columns and not data["MA20"].dropna().empty:
     fig.add_trace(go.Scatter(x=data.index, y=data['MA20'], line=dict(color='red'), name="MA20"))
 st.plotly_chart(fig, use_container_width=True)
 
