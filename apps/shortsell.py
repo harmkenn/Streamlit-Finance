@@ -21,7 +21,11 @@ def safe_float(x):
 # -----------------------------
 # Input
 # -----------------------------
-ticker = st.text_input("Enter Stock Ticker", "NVTS")
+# Get tickers from session state and split into a list
+tickers_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
+
+# Ticker selector
+ticker = st.selectbox("Select Stock Ticker", tickers_list) if tickers_list else ""
 
 # -----------------------------
 # Download data
