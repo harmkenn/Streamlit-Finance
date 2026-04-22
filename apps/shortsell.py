@@ -26,12 +26,19 @@ ticker = st.text_input("Enter Stock Ticker", "NVTS")
 # -----------------------------
 data = yf.download(ticker, period="6mo", interval="1d", auto_adjust=True)
 
-if data.empty:
+if data is None or data.empty:
     st.error("No data returned for this ticker.")
     st.stop()
 
+# Ensure correct structure
+data = data.copy()
+
 # Keep only needed columns safely
-data = data.loc[:, ["Close", "Volume"]].copy()
+if "Close" not in data.columns or "Volume" not in data.columns:
+    st.error("Unexpected data format from yfinance.")
+    st.stop()
+
+data = data[["Close", "Volume"]].copy()
 
 # -----------------------------
 # Indicators
@@ -49,12 +56,19 @@ data["RSI"] = 100 - (100 / (1 + rs))
 # Volume average
 data["VolAvg"] = data["Volume"].rolling(10).mean()
 
-# Clean NaNs
-data = data.dropna()
+# -----------------------------
+# Clean data (safe version)
+# -----------------------------
+data = data.dropna(subset=["Close"])
 
 if len(data) < 30:
-    st.warning("Not enough data after indicators calculated.")
+    st.warning("Not enough data for indicators yet.")
     st.stop()
+
+# Ensure indicator columns exist
+for col in ["MA10", "MA20", "RSI", "VolAvg"]:
+    if col not in data.columns:
+        data[col] = np.nan
 
 # -----------------------------
 # Latest rows
@@ -62,7 +76,6 @@ if len(data) < 30:
 latest = data.iloc[-1]
 prev = data.iloc[-2]
 
-# Safe values
 close = safe_float(latest["Close"])
 ma20 = safe_float(latest["MA20"])
 rsi = safe_float(latest["RSI"])
@@ -71,7 +84,7 @@ volavg = safe_float(latest["VolAvg"])
 prev_close = safe_float(prev["Close"])
 
 # -----------------------------
-# Score system
+# Scoring system
 # -----------------------------
 score = 0
 signals = []
@@ -81,7 +94,7 @@ if not np.isnan(close) and not np.isnan(ma20) and close < ma20:
     score += 1
     signals.append("Below 20-day MA")
 
-# 2. Momentum weakening
+# 2. RSI weakening
 if not np.isnan(rsi) and rsi < 50:
     score += 1
     signals.append("RSI below 50")
@@ -96,7 +109,7 @@ if (
         score += 1
         signals.append("High-volume selling")
 
-# 4. Failing highs (FIXED)
+# 4. Failing highs
 recent_high_series = data["Close"].tail(10).dropna()
 recent_high = safe_float(recent_high_series.max())
 
@@ -141,13 +154,22 @@ else:
     st.write("No bearish signals detected.")
 
 # -----------------------------
-# Chart
+# Chart (SAFE VERSION - FIXES KEYERROR)
 # -----------------------------
 st.subheader("📈 Price Chart")
-st.line_chart(data[["Close", "MA10", "MA20"]])
+
+plot_cols = ["Close", "MA10", "MA20"]
+plot_cols = [c for c in plot_cols if c in data.columns]
+
+plot_df = data[plot_cols].copy()
+
+if plot_df["Close"].dropna().empty:
+    st.warning("No chart data available.")
+else:
+    st.line_chart(plot_df)
 
 # -----------------------------
-# Debug
+# Debug (optional)
 # -----------------------------
 with st.expander("🔍 Debug Data"):
     st.write("Latest row:")
