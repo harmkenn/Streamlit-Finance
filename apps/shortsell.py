@@ -7,78 +7,109 @@ st.set_page_config(page_title="Seller's Market Detector", layout="wide")
 
 st.title("📉 Seller's Market Detector")
 
-# --- Input ---
+# -------------------------
+# Helpers
+# -------------------------
+def safe_float(x):
+    try:
+        return float(x)
+    except:
+        return np.nan
+
+# -------------------------
+# Input
+# -------------------------
 ticker = st.text_input("Enter Stock Ticker", "NVTS")
 
-# --- Download Data ---
+# -------------------------
+# Data Download
+# -------------------------
 data = yf.download(ticker, period="6mo", interval="1d", auto_adjust=True)
 
-# --- Safety Check ---
 if data.empty:
-    st.error("No data found. Try another ticker.")
+    st.error("No data found for this ticker.")
     st.stop()
 
-# Keep only needed columns
-data = data[['Close', 'Volume']]
+# Keep only needed columns safely
+data = data.loc[:, ["Close", "Volume"]].copy()
 
-# --- Indicators ---
-data['MA10'] = data['Close'].rolling(10).mean()
-data['MA20'] = data['Close'].rolling(20).mean()
+# -------------------------
+# Indicators
+# -------------------------
+data["MA10"] = data["Close"].rolling(10).mean()
+data["MA20"] = data["Close"].rolling(20).mean()
 
 # RSI
-delta = data['Close'].diff()
+delta = data["Close"].diff()
 gain = delta.clip(lower=0).rolling(14).mean()
-loss = -delta.clip(upper=0).rolling(14).mean()
+loss = (-delta.clip(upper=0)).rolling(14).mean()
 rs = gain / loss
-data['RSI'] = 100 - (100 / (1 + rs))
+data["RSI"] = 100 - (100 / (1 + rs))
 
-# Volume average
-data['VolAvg'] = data['Volume'].rolling(10).mean()
+# Volume avg
+data["VolAvg"] = data["Volume"].rolling(10).mean()
 
-# Drop NaNs (important)
+# Clean NaNs
 data = data.dropna()
 
-# Ensure enough data
 if len(data) < 30:
-    st.warning("Not enough data yet to calculate indicators.")
+    st.warning("Not enough data to compute indicators.")
     st.stop()
 
-# Latest rows
+# -------------------------
+# Latest values
+# -------------------------
 latest = data.iloc[-1].copy()
 prev = data.iloc[-2].copy()
 
-# --- Scoring System ---
+close = safe_float(latest["Close"])
+ma20 = safe_float(latest["MA20"])
+rsi = safe_float(latest["RSI"])
+vol = safe_float(latest["Volume"])
+volavg = safe_float(latest["VolAvg"])
+prev_close = safe_float(prev["Close"])
+
+# -------------------------
+# Scoring system
+# -------------------------
 score = 0
 signals = []
 
-# 1. Trend breakdown
-if float(latest['Close']) < float(latest['MA20']):
+# 1. Trend break
+if not np.isnan(close) and not np.isnan(ma20) and close < ma20:
     score += 1
     signals.append("Below 20-day MA")
 
 # 2. Momentum weakening
-if float(latest['RSI']) < 50:
+if not np.isnan(rsi) and rsi < 50:
     score += 1
     signals.append("RSI below 50")
 
-# 3. High-volume selling
-if float(latest['Volume']) > float(latest['VolAvg']) and float(latest['Close']) < float(prev['Close']):
-    score += 1
-    signals.append("High-volume selling")
+# 3. Volume selling pressure
+if (
+    not np.isnan(vol)
+    and not np.isnan(volavg)
+    and not np.isnan(prev_close)
+):
+    if vol > volavg and close < prev_close:
+        score += 1
+        signals.append("High-volume selling")
 
-# 4. Failing to make new highs
-recent_high = float(data['Close'].tail(10).max())
-if float(latest['Close']) < recent_high * 0.95:
+# 4. Failure to make new highs
+recent_high = float(data["Close"].tail(10).max())
+if close < recent_high * 0.95:
     score += 1
     signals.append("Failing to make new highs")
 
 # 5. Strong red day
-price_change = (float(latest['Close']) - float(prev['Close'])) / float(prev['Close'])
+price_change = (close - prev_close) / prev_close if prev_close else 0
 if price_change < -0.03:
     score += 1
-    signals.append("Strong red day (>3% drop)")
+    signals.append("Strong red day (>3%)")
 
-# --- Output ---
+# -------------------------
+# Output
+# -------------------------
 st.subheader("📊 Market Regime")
 
 if score >= 4:
@@ -90,22 +121,28 @@ else:
 
 st.write(f"Score: {score}/5")
 
-# --- Signals ---
+# -------------------------
+# Signals
+# -------------------------
 st.subheader("Triggered Signals")
+
 if signals:
     for s in signals:
-        st.write(f"- {s}")
+        st.write(f"• {s}")
 else:
-    st.write("No bearish signals triggered.")
+    st.write("No bearish signals detected.")
 
-# --- Chart ---
+# -------------------------
+# Chart
+# -------------------------
 st.subheader("📈 Price Chart")
-st.line_chart(data[['Close', 'MA10', 'MA20']])
+st.line_chart(data[["Close", "MA10", "MA20"]])
 
-# --- Debug Panel (optional but useful) ---
-with st.expander("🔍 Debug Info"):
-    st.write("Latest Row:")
+# -------------------------
+# Debug panel
+# -------------------------
+with st.expander("🔍 Debug Data"):
+    st.write("Latest row:")
     st.write(latest)
-    st.write("Previous Row:")
+    st.write("Previous row:")
     st.write(prev)
-    st.write("Recent High (10 days):", recent_high)
