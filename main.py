@@ -14,6 +14,7 @@ sub_app_names = {
     'Compare.py': 'Compare',
     'Whatif.py': 'Last Year',
     'shortsell.py': 'Trend',
+    'watchlist.py': 'Watchlist',
 }
 
 # Get a list of .py files from the SubApps folder
