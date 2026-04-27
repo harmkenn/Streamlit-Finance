@@ -211,12 +211,17 @@ if watchlist:
         if DAY_COL in df.columns:
             df = df.sort_values(by=DAY_COL, ascending=False)
 
-        styled_df = df.style.applymap(
-            color_gain,
-            subset=[col for col in [DAY_COL, WEEK_COL, MONTH_COL] if col in df.columns]
-        ).applymap(
-            color_valuation,
-            subset=["Valuation"]
+        # Use .map instead of deprecated .applymap on Styler
+        styled_df = (
+            df.style
+            .map(
+                color_gain,
+                subset=[col for col in [DAY_COL, WEEK_COL, MONTH_COL] if col in df.columns]
+            )
+            .map(
+                color_valuation,
+                subset=["Valuation"]
+            )
         )
 
         st.dataframe(styled_df, use_container_width=True)
@@ -224,6 +229,7 @@ if watchlist:
         st.write("No data available.")
 else:
     st.write("Your watchlist is empty. Add some tickers below.")
+
 
 # --- Add ticker
 st.subheader("➕ Add Ticker")
