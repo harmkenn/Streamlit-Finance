@@ -207,6 +207,10 @@ if watchlist:
     if metrics:
         df = pd.DataFrame(metrics)
 
+        # Remove columns that are entirely None
+        df = df.dropna(axis=1, how="all")
+
+
         # Safe sort
         if DAY_COL in df.columns:
             df = df.sort_values(by=DAY_COL, ascending=False)
