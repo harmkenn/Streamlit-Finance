@@ -1,3 +1,56 @@
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import json
+import os
+
+st.set_page_config(layout="wide")
+
+DATA_FILE = "data/watchlist.json"
+
+# --------------------------
+# Constants
+# --------------------------
+DAY_COL = "1D %"
+WEEK_COL = "1W %"
+MONTH_COL = "1M %"
+
+# --------------------------
+# File Handling
+# --------------------------
+def load_watchlist():
+    if not os.path.exists(DATA_FILE):
+        return []
+    with open(DATA_FILE, 'r') as f:
+        return json.load(f)
+
+def save_watchlist(watchlist):
+    os.makedirs("data", exist_ok=True)
+    with open(DATA_FILE, 'w') as f:
+        json.dump(watchlist, f)
+
+# --------------------------
+# Validation
+# --------------------------
+def validate_ticker(ticker):
+    try:
+        data = yf.download(ticker, period="1d", progress=False)
+        return not data.empty
+    except:
+        return False
+
+# --------------------------
+# Helpers
+# --------------------------
+def safe_round(val):
+    try:
+        return round(val, 2) if val is not None else None
+    except:
+        return None
+
+# --------------------------
+# Metrics + Scoring
+# --------------------------
 @st.cache_data(ttl=300)
 def get_all_metrics(tickers):
     results = []
@@ -120,3 +173,93 @@ def get_all_metrics(tickers):
             continue
 
     return results
+
+# --------------------------
+# Styling
+# --------------------------
+def color_gain(val):
+    if val is None:
+        return ''
+    return 'color: green' if val > 0 else 'color: red'
+
+def color_valuation(val):
+    if val == "Undervalued":
+        return "color: green; font-weight: bold"
+    elif val == "Expensive":
+        return "color: red; font-weight: bold"
+    elif val == "Fair":
+        return "color: orange"
+    return ""
+
+# --------------------------
+# UI
+# --------------------------
+st.title("📈 Stock Watchlist")
+
+watchlist = load_watchlist()
+
+# --- Display
+if watchlist:
+    st.subheader("Your Watchlist")
+
+    metrics = get_all_metrics(watchlist)
+
+    if metrics:
+        df = pd.DataFrame(metrics)
+
+        # Safe sort
+        if DAY_COL in df.columns:
+            df = df.sort_values(by=DAY_COL, ascending=False)
+
+        styled_df = df.style.applymap(
+            color_gain,
+            subset=[col for col in [DAY_COL, WEEK_COL, MONTH_COL] if col in df.columns]
+        ).applymap(
+            color_valuation,
+            subset=["Valuation"]
+        )
+
+        st.dataframe(styled_df, use_container_width=True)
+    else:
+        st.write("No data available.")
+else:
+    st.write("Your watchlist is empty. Add some tickers below.")
+
+# --- Add ticker
+st.subheader("➕ Add Ticker")
+
+ticker_input = st.text_input("Enter stock ticker (e.g., AAPL)")
+
+if st.button("Add Ticker"):
+    if ticker_input:
+        ticker = ticker_input.upper().strip()
+
+        if ticker in watchlist:
+            st.warning("Ticker already in watchlist.")
+        elif validate_ticker(ticker):
+            watchlist.append(ticker)
+            save_watchlist(watchlist)
+            st.success(f"Added {ticker}")
+            st.rerun()
+        else:
+            st.error("Invalid ticker.")
+    else:
+        st.warning("Please enter a ticker.")
+
+# --- Delete tickers
+if watchlist:
+    st.subheader("🗑️ Delete Tickers")
+
+    selected = [
+        ticker for ticker in watchlist
+        if st.checkbox(f"Delete {ticker}", key=f"del_{ticker}")
+    ]
+
+    if st.button("Delete Selected"):
+        if selected:
+            watchlist = [t for t in watchlist if t not in selected]
+            save_watchlist(watchlist)
+            st.success(f"Deleted: {', '.join(selected)}")
+            st.rerun()
+        else:
+            st.warning("No tickers selected.")
