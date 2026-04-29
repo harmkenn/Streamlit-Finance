@@ -3,11 +3,23 @@ import importlib.util
 import os
 import yfinance as yf
 
+# --- Helper functions ---
+TICKERS_FILE = "tickers.txt"
 
-# Set the page layout to wide
-st.set_page_config(layout="wide", page_title=f"Finance")
+def load_tickers():
+    if os.path.exists(TICKERS_FILE):
+        with open(TICKERS_FILE, "r") as f:
+            return f.read().strip()
+    # default fallback
+    return "TQQQ,UPRO,UDOW,BNO,NVTS,MXL,^VIX"
 
-# Dictionary that maps .py filenames to user-friendly names
+def save_tickers(tickers_str):
+    with open(TICKERS_FILE, "w") as f:
+        f.write(tickers_str.strip())
+
+# --- Streamlit setup ---
+st.set_page_config(layout="wide", page_title="Finance")
+
 sub_app_names = {
     'Intraday.py': 'Intraday',
     'BuySellHold.py': 'Buy Sell or Hold',
@@ -17,28 +29,29 @@ sub_app_names = {
     'watchlist.py': 'Watchlist',
 }
 
-# Get a list of .py files from the SubApps folder
 sub_apps_folder = 'apps'
 sub_apps = [f for f in os.listdir(sub_apps_folder) if f.endswith('.py')]
 
-# Create radio buttons in the sidebar using the user-friendly names
 selected_sub_app_name = st.sidebar.radio('Select a sub-app', list(sub_app_names.values()))
-
-# Get the corresponding .py filename from the selected name
 selected_sub_app = [k for k, v in sub_app_names.items() if v == selected_sub_app_name][0]
 
-# Sidebar input for comma-separated tickers
+# --- Editable ticker list ---
+if "tickers" not in st.session_state:
+    st.session_state["tickers"] = load_tickers()
+
 tickers_list = st.sidebar.text_area(
     "Enter comma-separated stock tickers",
-    value=st.session_state.get("tickers", "TQQQ,UPRO,UDOW,BNO,NVTS,MXL,^VIX"),height=100
+    value=st.session_state["tickers"],
+    height=100
 )
-st.session_state["tickers"] = tickers_list
 
-# Import and run the selected sub-app
+# Save edits when user changes
+if tickers_list != st.session_state["tickers"]:
+    st.session_state["tickers"] = tickers_list
+    save_tickers(tickers_list)
+
+# --- Run selected sub-app ---
 if selected_sub_app:
     spec = importlib.util.spec_from_file_location(selected_sub_app, os.path.join(sub_apps_folder, selected_sub_app))
     sub_app_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sub_app_module)
-
-
-
