@@ -11,7 +11,7 @@ def load_tickers():
         with open(TICKERS_FILE, "r") as f:
             return f.read().strip()
     # default fallback
-    return "TQQQ,UPRO,UDOW,BNO,NVTS,MXL,^VIX"
+    return "TQQQ,UPRO,UDOW,BNO,^VIX,SPHY,MXL"
 
 def save_tickers(tickers_str):
     with open(TICKERS_FILE, "w") as f:
