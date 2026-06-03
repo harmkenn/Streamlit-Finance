@@ -41,7 +41,7 @@ if "tickers" not in st.session_state:
 
 tickers_list = st.sidebar.text_area(
     "Enter comma-separated stock tickers",
-    value=st.session_state.get("tickers", "TQQQ,UPRO,UDOW,BNO,NVTS,MXL,^VIX"),height=100
+    value=st.session_state.get("tickers", "TQQQ,UPRO,UDOW,^VIX"),height=100
 )
 
 # Save edits when user changes
