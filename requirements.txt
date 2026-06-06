@@ -15,11 +15,3 @@ matplotlib
 scikit-learn
 seaborn
 statsmodels
-textblob
-playwright
-beautifulsoup4
-alpaca-py
-python-dateutil
-transformers
-torch
-torchvision
