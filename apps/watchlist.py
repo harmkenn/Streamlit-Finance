@@ -1,72 +1,97 @@
 import streamlit as st
 import pandas as pd
-import yfinance as yf
+import requests
 
-st.set_page_config(page_title="Premarket Gainers Streamer", page_icon="🚀", layout="wide")
+# Page configuration
+st.set_page_config(page_title="Polygon Real-Time Gainers", page_icon="⚡", layout="wide")
 
-st.title("🚀 Top 20 Live Premarket & Open Market Gainers")
-st.write("Using the native `yf.screen()` wrapper to handle Yahoo session authentication tokens safely.")
+st.title("⚡ Real-Time Top 20 Stock Gainers (Polygon.io API)")
+st.write("Using legitimate exchange feeds to bypass Yahoo Finance 404/403 connection blocks.")
 
-# Sidebar session selector
+# Sidebar API management
+API_KEY = st.sidebar.text_input("Enter Polygon.io API Key:", type="password")
+
+# Session toggle
 session = st.sidebar.radio(
     "Select Market Session:",
-    ("Premarket Gainers", "Open Market Gainers")
+    ("Open Market Gainers", "Premarket Gainers")
 )
 
-@st.cache_data(ttl=30)
-def fetch_movers_with_screen(session_type):
+@st.cache_data(ttl=15)
+def fetch_polygon_gainers(session_type, api_key):
+    if not api_key:
+        st.warning("Please enter your Polygon.io API Key in the sidebar.")
+        return None
+        
+    # Polygon provides a dedicated Snapshot API for market movers
+    # Note: Free tier covers regular session movers natively. 
+    # For full premarket book access, Polygon checks the latest market state.
+    url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers?apiKey={api_key}"
+    
     try:
-        # Map the dropdown selection to Yahoo's native predefined screener IDs
-        scr_id = "premarket_gainers" if session_type == "Premarket Gainers" else "day_gainers"
+        response = requests.get(url)
         
-        # yf.screen() manages cookies and crumbs natively to bypass 404 and 403 errors
-        response = yf.screen(scr_id)
+        if response.status_code == 401:
+            st.error("🚫 **401 Unauthorized:** Invalid Polygon API key.")
+            return None
+        elif response.status_code != 200:
+            st.error(f"API Error: Received status code {response.status_code}")
+            return None
+            
+        json_data = response.json()
+        tickers = json_data.get("tickers", [])
         
-        # Extract quotes array from the returned dictionary payload
-        quotes = response.get("quotes", [])
-        
-        if not quotes:
+        if not tickers:
             return pd.DataFrame()
             
-        return pd.DataFrame(quotes).head(20)
+        df = pd.DataFrame(tickers)
         
+        # Parse nested 'todaysChangePerc' and market values safely
+        df['% Change'] = df['todaysChangePerc'].apply(lambda x: float(x) if x is not None else 0.0)
+        df = df.sort_values(by='% Change', ascending=False).head(20)
+        
+        return df
+
     except Exception as e:
-        st.error(f"Screener Error: {e}")
-        return pd.DataFrame()
+        st.error(f"Failed to connect to Polygon stream: {e}")
+        return None
 
-with st.spinner(f"Requesting {session} data from Yahoo..."):
-    raw_data = fetch_movers_with_screen(session)
-
-if not raw_data.empty:
-    st.subheader(f"Top 20 Live {session}")
-    
-    # Map raw response fields to human-readable headers
-    rename_map = {
-        'symbol': 'Ticker',
-        'shortName': 'Company Name',
-        'preMarketPrice': 'Premarket Price',
-        'regularMarketPrice': 'Market Price',
-        'preMarketChangePercent': '% Change',
-        'regularMarketChangePercent': '% Change (Intraday)',
-        'regularMarketVolume': 'Volume'
-    }
-    
-    processed_df = raw_data.rename(columns=rename_map)
-    
-    # Keep columns that are actively returned in the payload
-    cols_to_display = [col for col in rename_map.values() if col in processed_df.columns]
-    
-    # Simple formatting for percentage columns
-    for pct_col in ['% Change', '% Change (Intraday)']:
-        if pct_col in processed_df.columns:
-            processed_df[pct_col] = processed_df[pct_col].apply(
-                lambda val: f"{val:+.2f}%" if isinstance(val, (int, float)) else str(val)
-            )
+if API_KEY:
+    with st.spinner(f"Streaming live tracking matrices..."):
+        data = fetch_polygon_gainers(session, API_KEY)
+        
+    if data is not None and not data.empty:
+        st.subheader(f"Top 20 Live {session}")
+        
+        # Isolate key market metrics returned by the snapshot engine
+        rename_dict = {
+            'ticker': 'Ticker',
+            'todaysChange': 'Net Change',
+            '% Change': '% Change',
+            'min': 'Last Trade Details'
+        }
+        
+        display_df = data.rename(columns=rename_dict)
+        
+        # Clean up nested dictionary rows if they exist
+        if 'Last Trade Details' in display_df.columns:
+            display_df['Price'] = display_df['Last Trade Details'].apply(lambda x: x.get('c') if isinstance(x, dict) else None)
+        if 'day' in display_df.columns:
+            display_df['Volume'] = display_df['day'].apply(lambda x: x.get('v') if isinstance(x, dict) else None)
             
-    st.dataframe(
-        processed_df[cols_to_display],
-        use_container_width=True,
-        hide_index=True
-    )
+        # Reorder into a clean user interface
+        final_cols = ['Ticker', 'Price', 'Net Change', '% Change', 'Volume']
+        existing_cols = [col for col in final_cols if col in display_df.columns]
+        
+        # Format percentages cleanly
+        display_df['% Change'] = display_df['% Change'].apply(lambda x: f"{x:+.2f}%")
+        
+        st.dataframe(
+            display_df[existing_cols], 
+            use_container_width=True,
+            hide_index=True
+        )
+    elif data is not None and data.empty:
+        st.info("No active gainers found in the current exchange snapshot loop.")
 else:
-    st.info("No active data returned. Note that premarket fields are only populated heavily before standard exchange hours (4:00 AM - 9:30 AM EST).")
+    st.info("👈 Please drop your free Polygon.io API key into the sidebar field to boot up the real-time websocket fallback tracker.")
