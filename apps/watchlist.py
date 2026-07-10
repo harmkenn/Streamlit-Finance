@@ -1,6 +1,6 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
+import requests
 
 st.set_page_config(page_title="Top 20 Gainers", layout="wide")
 st.title("📈 Top 20 Stock Gainers Right Now")
@@ -9,11 +9,18 @@ st.title("📈 Top 20 Stock Gainers Right Now")
 if st.button("🔄 Refresh"):
     st.experimental_rerun()
 
-# Pull top gainers from Yahoo Finance
-gainers = yf.get_day_gainers()
+# Yahoo Finance Screener API (public)
+url = "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?count=100&scrIds=day_gainers"
 
-# Select columns you want
-df = gainers[["symbol", "price", "change_percent", "volume"]]
+response = requests.get(url).json()
+
+results = response["finance"]["result"][0]["quotes"]
+
+# Build DataFrame
+df = pd.DataFrame(results)
+
+# Select columns
+df = df[["symbol", "regularMarketPrice", "regularMarketChangePercent", "regularMarketVolume"]]
 
 # Rename columns
 df.columns = ["Ticker", "Price", "% Change", "Volume"]
