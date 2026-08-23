@@ -6,16 +6,16 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Short Candidate Inspector", layout="wide")
 st.title("📉 Single-Ticker Parabolic Short Inspector")
-st.markdown("Analyze short exhaustion signals alongside a 10-day extended-hours intraday price chart.")
+st.markdown("Analyze short candidates favoring entry setups trading **ABOVE VWAP**.")
 
 # --- FREE DATA ENGINE (YFINANCE) ---
 def fetch_stock_data(symbol: str) -> dict:
-    """Fetches intraday bars (including pre/post market), 10-day history, and short float data."""
+    """Fetches intraday bars (including pre/post market), 10-day history, and float data."""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         
-        # 1. Today's 1-minute data for VWAP & Day High calculations (including pre-market)
+        # 1. Today's 1-minute data for VWAP & Day High calculations
         hist_1d = ticker.history(period="1d", interval="1m", prepost=True)
         if hist_1d.empty:
             return None
@@ -77,12 +77,13 @@ def estimate_borrow_status(float_shares: int, short_pct_float: float, gain_24h: 
     else:
         return "🟡 Check E*TRADE", "Medium Float. Verify available shares on Power E*TRADE."
 
-# --- SHORT SCORING ENGINE ---
+# --- SHORT SCORING ENGINE (UPDATED FOR ABOVE VWAP PREFERENCE) ---
 def calculate_short_score(data: dict) -> dict:
     boosters = []
     penalties = []
     score = 0
 
+    # 1. Parabolic Expansion Boosters
     if data['gain_24h'] >= 1.0:
         score += 25
         boosters.append(("+25 pts", "Massive 24h Gain (≥100%)"))
@@ -97,40 +98,40 @@ def calculate_short_score(data: dict) -> dict:
         score += 10
         boosters.append(("+10 pts", "Elevated Volume (RVOL ≥3x)"))
 
-    if data['drop_from_high'] >= 0.35:
-        score += 20
-        boosters.append(("+20 pts", "Deep Pullback from Highs (≥35%)"))
-    elif data['drop_from_high'] >= 0.15:
-        score += 10
-        boosters.append(("+10 pts", "Moderate Pullback from Highs (≥15%)"))
-
-    if data['rejection_pct'] >= 0.65:
-        score += 20
-        boosters.append(("+20 pts", "Heavy Spike Rejection (≥65% surrendered)"))
-
-    if data['price'] < data['vwap']:
-        score += 10
-        boosters.append(("+10 pts", "Trading Below Intraday Anchored VWAP"))
-
-    if data['drop_from_high'] <= 0.08:
-        score -= 35
-        penalties.append(("-35 pts", "Hugging Day Highs (Drop ≤8%) — Squeeze risk!"))
-        
+    # 2. VWAP & Premium Entry Boosters (User Preference: Short ABOVE VWAP)
     if data['price'] > data['vwap']:
-        score -= 20
-        penalties.append(("-20 pts", "Holding Above VWAP — Buyers still in control."))
+        score += 20
+        boosters.append(("+20 pts", "Price ABOVE VWAP — Prime fade location for premium short risk-reward!"))
+    else:
+        score -= 10
+        penalties.append(("-10 pts", "Price BELOW VWAP — Move already breaking down."))
+
+    # 3. Pullback / Rejection Metrics
+    if data['drop_from_high'] >= 0.25:
+        score += 15
+        boosters.append(("+15 pts", "Noticeable Pullback from Highs (≥25%)"))
+    
+    if data['rejection_pct'] >= 0.50:
+        score += 15
+        boosters.append(("+15 pts", "Spike Rejection Active (≥50% surrendered)"))
+
+    # 4. Parabolic Continuation Penalties
+    if data['drop_from_high'] <= 0.05:
+        score -= 30
+        penalties.append(("-30 pts", "Hugging Day Highs (Drop ≤5%) — Extreme squeeze/parabolic risk!"))
 
     final_score = max(0, min(100, score))
 
-    if final_score >= 80 and data['price'] < data['vwap']:
+    # Trigger logic now requires price to be ABOVE VWAP
+    if final_score >= 75 and data['price'] > data['vwap']:
         status = "🔴 TRIGGER"
-        status_msg = "Multiple failure conditions aligned. Strong exhaustion signal."
-    elif final_score >= 60:
+        status_msg = "Stock is extended ABOVE VWAP showing initial exhaustion. Ideal fade location."
+    elif final_score >= 55:
         status = "🟡 ARMED"
-        status_msg = "Rejection in progress. Monitor closely for VWAP loss."
+        status_msg = "Extended setup building. Watch price action around VWAP for entry."
     else:
         status = "⚪ CANDIDATE"
-        status_msg = "Weak exhaustion or strong continuation momentum. Avoid shorting."
+        status_msg = "Setup lacks parabolic extension or is already dumped below VWAP."
 
     return {
         "final_score": final_score,
@@ -172,7 +173,7 @@ if ticker_input or analyze_click:
         st.info(f"**State Summary:** {eval_res['status_msg']}")
 
         # --- 10-DAY EXTENDED HOURS PLOTLY CHART ---
-        st.subheader("📈 10-Day Intraday Chart (Includes Pre-Market & After-Hours)")
+        st.subheader("📈 10-Day Intraday Chart (Includes Extended Hours)")
         
         hist_df = data['hist_10d']
         fig = go.Figure()
@@ -209,7 +210,6 @@ if ticker_input or analyze_click:
             yaxis_title="Stock Price ($)",
             margin=dict(l=20, r=20, t=30, b=20),
             hovermode="x unified",
-            # Hides weekend gaps so the line chart connects smoothly across trading sessions
             xaxis=dict(
                 type="category",
                 nticks=10
@@ -221,14 +221,15 @@ if ticker_input or analyze_click:
         # TECHNICAL BREAKDOWN
         st.subheader("📊 Intraday Metric Breakdown")
         d1, d2, d3, d4 = st.columns(4)
-        d1.write(f"**Day High (Inc. Pre):** ${data['day_high']:.2f}")
+        d1.write(f"**Day High:** ${data['day_high']:.2f}")
         d1.write(f"**Previous Close:** ${data['prev_close']:.2f}")
 
         d2.write(f"**Drop From High:** {data['drop_from_high']*100:.1f}%")
         d2.write(f"**Spike Rejection:** {data['rejection_pct']*100:.1f}%")
 
-        vwap_relation = "BELOW" if data['price'] < data['vwap'] else "ABOVE"
-        d3.write(f"**Today VWAP:** ${data['vwap']:.2f} ({vwap_relation})")
+        vwap_relation = "ABOVE 🟢" if data['price'] > data['vwap'] else "BELOW 🔴"
+        vwap_diff = ((data['price'] - data['vwap']) / data['vwap']) * 100
+        d3.write(f"**Today VWAP:** ${data['vwap']:.2f} ({vwap_relation} {vwap_diff:+.1f}%)")
         d3.write(f"**RVOL Proxy:** {data['rvol']:.1f}x")
 
         float_str = f"{data['float_shares']/1e6:.1f}M" if data['float_shares'] else "N/A"
@@ -245,12 +246,12 @@ if ticker_input or analyze_click:
                 for pts, desc in eval_res['boosters']:
                     st.write(f"• **{pts}**: {desc}")
             else:
-                st.write("No exhaustion boosters triggered.")
+                st.write("No positive setup points triggered.")
 
         with c2:
-            st.markdown("### 🔴 Warning Penalties (Continuation Risk)")
+            st.markdown("### 🔴 Warning Penalties (Continuation / Below VWAP)")
             if eval_res['penalties']:
                 for pts, desc in eval_res['penalties']:
                     st.write(f"• **{pts}**: {desc}")
             else:
-                st.write("No continuation penalties active.")
+                st.write("No active warning penalties.")
