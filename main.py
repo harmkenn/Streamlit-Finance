@@ -27,6 +27,7 @@ sub_app_names = {
     'Whatif.py': 'Last Year',
     'shortsell.py': 'Trend',
     'watchlist.py': 'Watchlist',
+    'shortsell.py': 'Short Screener',
 }
 
 sub_apps_folder = 'apps'
