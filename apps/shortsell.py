@@ -6,17 +6,17 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Short Candidate Inspector", layout="wide")
 st.title("📉 Single-Ticker Parabolic Short Inspector")
-st.markdown("Analyze short exhaustion signals alongside a 10-day intraday baseline price chart.")
+st.markdown("Analyze short exhaustion signals alongside a 10-day extended-hours intraday price chart.")
 
 # --- FREE DATA ENGINE (YFINANCE) ---
 def fetch_stock_data(symbol: str) -> dict:
-    """Fetches intraday bars, 10-day chart history, and short float data."""
+    """Fetches intraday bars (including pre/post market), 10-day history, and short float data."""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         
-        # 1. Today's 1-minute data for fine VWAP & Day High calculations
-        hist_1d = ticker.history(period="1d", interval="1m")
+        # 1. Today's 1-minute data for VWAP & Day High calculations (including pre-market)
+        hist_1d = ticker.history(period="1d", interval="1m", prepost=True)
         if hist_1d.empty:
             return None
 
@@ -29,8 +29,8 @@ def fetch_stock_data(symbol: str) -> dict:
         tp = (hist_1d['High'] + hist_1d['Low'] + hist_1d['Close']) / 3
         vwap = (tp * hist_1d['Volume']).sum() / hist_1d['Volume'].sum() if hist_1d['Volume'].sum() > 0 else curr_price
         
-        # 2. 10-Day Intraday history (5m bars) for baseline price charting
-        hist_10d = ticker.history(period="10d", interval="5m")
+        # 2. 10-Day Intraday history (5m bars) WITH Extended Hours enabled
+        hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
         
         # Ratios & Metrics
         gain_24h = (curr_price - prev_close) / prev_close if prev_close > 0 else 0
@@ -143,13 +143,13 @@ def calculate_short_score(data: dict) -> dict:
 # --- USER INPUT ---
 col_input, col_btn = st.columns([3, 1])
 with col_input:
-    ticker_input = st.text_input("Enter Stock Ticker:", "CHAI").strip().upper()
+    ticker_input = st.text_input("Enter Stock Ticker:", "SDOT").strip().upper()
 with col_btn:
     st.write(" ")
     analyze_click = st.button("Analyze Stock", use_container_width=True)
 
 if ticker_input or analyze_click:
-    with st.spinner(f"Loading 10-day market data for {ticker_input}..."):
+    with st.spinner(f"Loading 10-day market & extended-hours data for {ticker_input}..."):
         data = fetch_stock_data(ticker_input)
 
     if not data:
@@ -171,8 +171,8 @@ if ticker_input or analyze_click:
 
         st.info(f"**State Summary:** {eval_res['status_msg']}")
 
-        # --- 10-DAY INTRADAY PLOTLY CHART ---
-        st.subheader("📈 10-Day Intraday Baseline Chart")
+        # --- 10-DAY EXTENDED HOURS PLOTLY CHART ---
+        st.subheader("📈 10-Day Intraday Chart (Includes Pre-Market & After-Hours)")
         
         hist_df = data['hist_10d']
         fig = go.Figure()
@@ -182,7 +182,7 @@ if ticker_input or analyze_click:
             x=hist_df.index,
             y=hist_df['Close'],
             mode='lines',
-            name='Price (5m)',
+            name='Price (5m Extended)',
             line=dict(color='#00B4D8', width=1.5)
         ))
 
@@ -204,11 +204,16 @@ if ticker_input or analyze_click:
 
         fig.update_layout(
             template="plotly_dark",
-            height=420,
+            height=450,
             xaxis_title="Date/Time",
             yaxis_title="Stock Price ($)",
             margin=dict(l=20, r=20, t=30, b=20),
-            hovermode="x unified"
+            hovermode="x unified",
+            # Hides weekend gaps so the line chart connects smoothly across trading sessions
+            xaxis=dict(
+                type="category",
+                nticks=10
+            )
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -216,7 +221,7 @@ if ticker_input or analyze_click:
         # TECHNICAL BREAKDOWN
         st.subheader("📊 Intraday Metric Breakdown")
         d1, d2, d3, d4 = st.columns(4)
-        d1.write(f"**Day High:** ${data['day_high']:.2f}")
+        d1.write(f"**Day High (Inc. Pre):** ${data['day_high']:.2f}")
         d1.write(f"**Previous Close:** ${data['prev_close']:.2f}")
 
         d2.write(f"**Drop From High:** {data['drop_from_high']*100:.1f}%")
