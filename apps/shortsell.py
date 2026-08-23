@@ -1,4 +1,6 @@
 import re
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import yfinance as yf
@@ -7,15 +9,29 @@ import numpy as np
 import plotly.graph_objects as go
 import requests
 
+PREMARKET_URL = "https://stockanalysis.com/markets/premarket/"
 TOP_GAINERS_URL = "https://stockanalysis.com/markets/gainers/"
+
+
+def resolve_market_source_url(now: datetime | None = None) -> str:
+    """Use the premarket list from 4:00 a.m. ET to 9:30 a.m. ET on weekdays; otherwise use the regular gainers list."""
+    current_time = now or datetime.now(ZoneInfo("America/New_York"))
+    is_weekday = current_time.weekday() < 5
+    market_open = time(9, 30)
+    premarket_start = time(4, 0)
+
+    if is_weekday and premarket_start <= current_time.timetz() < market_open:
+        return PREMARKET_URL
+    return TOP_GAINERS_URL
 
 
 @st.cache_data(ttl=300)
 def get_top_gainers(limit: int = 10) -> list[str]:
-    """Fetch the current top 10 gainers from StockAnalysis and return their ticker symbols."""
+    """Fetch the current top gainers from the correct StockAnalysis page and return their ticker symbols."""
+    target_url = resolve_market_source_url()
     try:
         response = requests.get(
-            TOP_GAINERS_URL,
+            target_url,
             timeout=15,
             headers={"User-Agent": "Mozilla/5.0"},
         )
