@@ -4,32 +4,42 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-st.set_page_config(page_title="Short Candidate Inspector", layout="wide")
+st.set_page_config(page_title="Single-Day Parabolic Short Inspector", layout="wide")
 st.title("📉 Single-Ticker Parabolic Short Inspector")
-st.markdown("Analyze short candidates favoring entry setups trading **ABOVE VWAP**.")
+st.markdown("Optimized for **Single-Day Micro-Cap Spikes (100%+ Gains)** shorted **ABOVE VWAP** returning to baseline.")
 
-# --- FREE DATA ENGINE (YFINANCE) ---
+# --- FREE DATA ENGINE WITH OFF-HOURS FALLBACK ---
 def fetch_stock_data(symbol: str) -> dict:
-    """Fetches intraday bars (including pre/post market), 10-day history, and float data."""
+    """Fetches intraday data with fallbacks for off-hours and extended sessions."""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
         
-        # 1. Today's 1-minute data for VWAP & Day High calculations
-        hist_1d = ticker.history(period="1d", interval="1m", prepost=True)
+        # 1. Fetch up to 5 days of 1-minute bars with extended hours enabled
+        hist_1d = ticker.history(period="5d", interval="1m", prepost=True)
         if hist_1d.empty:
             return None
 
-        curr_price = hist_1d['Close'].iloc[-1]
-        day_high = hist_1d['High'].max()
-        day_low = hist_1d['Low'].min()
-        prev_close = info.get('previousClose', hist_1d['Open'].iloc[0])
+        # Filter to the most recent trading session
+        latest_date = hist_1d.index.max().date()
+        session_df = hist_1d[hist_1d.index.date == latest_date]
+        if session_df.empty:
+            session_df = hist_1d
+
+        curr_price = session_df['Close'].iloc[-1]
+        day_high = session_df['High'].max()
+        day_low = session_df['Low'].min()
         
-        # Calculate Today's Anchored Intraday VWAP
-        tp = (hist_1d['High'] + hist_1d['Low'] + hist_1d['Close']) / 3
-        vwap = (tp * hist_1d['Volume']).sum() / hist_1d['Volume'].sum() if hist_1d['Volume'].sum() > 0 else curr_price
+        # Fallback for Previous Close
+        prev_close = info.get('previousClose', None)
+        if not prev_close or np.isnan(prev_close):
+            prev_close = session_df['Open'].iloc[0]
         
-        # 2. 10-Day Intraday history (5m bars) WITH Extended Hours enabled
+        # Today's Anchored Intraday VWAP
+        tp = (session_df['High'] + session_df['Low'] + session_df['Close']) / 3
+        vwap = (tp * session_df['Volume']).sum() / session_df['Volume'].sum() if session_df['Volume'].sum() > 0 else curr_price
+        
+        # 2. 10-Day history (5m bars) with extended hours
         hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
         
         # Ratios & Metrics
@@ -40,7 +50,7 @@ def fetch_stock_data(symbol: str) -> dict:
         rejection_pct = (day_high - curr_price) / denom if denom > 0 else 0
         
         # RVOL Proxy
-        tot_vol = hist_1d['Volume'].sum()
+        tot_vol = session_df['Volume'].sum()
         avg_vol = info.get('averageVolume10days', tot_vol)
         rvol = tot_vol / (avg_vol / 6.5) if avg_vol > 0 else 1.0
         
@@ -61,7 +71,8 @@ def fetch_stock_data(symbol: str) -> dict:
             "rvol": rvol,
             "float_shares": float_shares,
             "short_pct_float": short_percent_of_float,
-            "hist_10d": hist_10d
+            "hist_10d": hist_10d,
+            "trade_date": latest_date
         }
     except Exception:
         return None
@@ -69,88 +80,97 @@ def fetch_stock_data(symbol: str) -> dict:
 # --- BORROW RISK ESTIMATOR ---
 def estimate_borrow_status(float_shares: int, short_pct_float: float, gain_24h: float) -> tuple[str, str]:
     if float_shares > 0 and float_shares < 10_000_000 and gain_24h > 0.40:
-        return "🟠 Hard to Borrow Likely", "Low Float Micro-cap (<10M float) with strong intraday pump."
+        return "🟠 Hard to Borrow Likely", "Micro-Cap Float (<10M float) with 100%+ intraday spike."
     elif short_pct_float > 0.20:
         return "🟠 Hard to Borrow Likely", "High Short Interest (>20% of float)."
     elif float_shares >= 50_000_000:
         return "🟢 Easy to Borrow Likely", "Large Float (>50M shares)."
     else:
-        return "🟡 Check E*TRADE", "Medium Float. Verify available shares on Power E*TRADE."
+        return "🟡 Check E*TRADE", "Medium Float. Verify available inventory on Power E*TRADE."
 
-# --- SHORT SCORING ENGINE (UPDATED FOR ABOVE VWAP PREFERENCE) ---
+# --- SHORT SCORING ENGINE (TAILORED FOR 100%+ SINGLE-DAY SPIKES ABOVE VWAP) ---
 def calculate_short_score(data: dict) -> dict:
     boosters = []
     penalties = []
     score = 0
 
-    # 1. Parabolic Expansion Boosters
-    if data['gain_24h'] >= 1.0:
+    # 1. Single-Day Parabolic Extension Boosters
+    if data['gain_24h'] >= 1.50:  # +150% or higher
+        score += 35
+        boosters.append(("+35 pts", "Extreme Single-Day Surge (≥150% gain)"))
+    elif data['gain_24h'] >= 1.00:  # +100% to +149%
         score += 25
-        boosters.append(("+25 pts", "Massive 24h Gain (≥100%)"))
+        boosters.append(("+25 pts", "Target Intraday Surge (≥100% gain)"))
     elif data['gain_24h'] >= 0.50:
-        score += 15
-        boosters.append(("+15 pts", "Strong 24h Gain (≥50%)"))
-
-    if data['rvol'] >= 10:
-        score += 15
-        boosters.append(("+15 pts", "Extremely High Volume Expansion (RVOL ≥10x)"))
-    elif data['rvol'] >= 3:
         score += 10
-        boosters.append(("+10 pts", "Elevated Volume (RVOL ≥3x)"))
-
-    # 2. VWAP & Premium Entry Boosters (User Preference: Short ABOVE VWAP)
-    if data['price'] > data['vwap']:
-        score += 20
-        boosters.append(("+20 pts", "Price ABOVE VWAP — Prime fade location for premium short risk-reward!"))
+        boosters.append(("+10 pts", "Moderate Surge (50%-99% gain)"))
     else:
-        score -= 10
-        penalties.append(("-10 pts", "Price BELOW VWAP — Move already breaking down."))
+        score -= 20
+        penalties.append(("-20 pts", "Weak Gain (<50% gain) — Lacks parabolic extension"))
 
-    # 3. Pullback / Rejection Metrics
-    if data['drop_from_high'] >= 0.25:
-        score += 15
-        boosters.append(("+15 pts", "Noticeable Pullback from Highs (≥25%)"))
-    
-    if data['rejection_pct'] >= 0.50:
-        score += 15
-        boosters.append(("+15 pts", "Spike Rejection Active (≥50% surrendered)"))
+    # 2. RVOL Expansion
+    if data['rvol'] >= 15:
+        score += 20
+        boosters.append(("+20 pts", "Massive Relative Volume (RVOL ≥15x)"))
+    elif data['rvol'] >= 5:
+        score += 10
+        boosters.append(("+10 pts", "Elevated Relative Volume (RVOL ≥5x)"))
 
-    # 4. Parabolic Continuation Penalties
+    # 3. Shorting Above VWAP (Premium Entry Location)
+    vwap_diff = ((data['price'] - data['vwap']) / data['vwap']) * 100
+    if data['price'] > data['vwap']:
+        if vwap_diff >= 15:
+            score += 25
+            boosters.append(("+25 pts", f"Stretched Above VWAP ({vwap_diff:+.1f}%) — Optimal fade premium!"))
+        else:
+            score += 15
+            boosters.append(("+15 pts", f"Trading Above VWAP ({vwap_diff:+.1f}%)"))
+    else:
+        score -= 15
+        penalties.append(("-15 pts", f"Trading Below VWAP ({vwap_diff:+.1f}%) — Move already broke down"))
+
+    # 4. Low Float Micro-Cap Identification
+    if 0 < data['float_shares'] <= 10_000_000:
+        score += 10
+        boosters.append(("+10 pts", f"Low Float Micro-Cap ({data['float_shares']/1e6:.1f}M shares) — Classic pump candidate"))
+
+    # 5. Squeeze Risk Penalties
     if data['drop_from_high'] <= 0.05:
         score -= 30
-        penalties.append(("-30 pts", "Hugging Day Highs (Drop ≤5%) — Extreme squeeze/parabolic risk!"))
+        penalties.append(("-30 pts", "Hugging Day Highs (Drop ≤5%) — Extreme continuation/squeeze risk!"))
 
     final_score = max(0, min(100, score))
 
-    # Trigger logic now requires price to be ABOVE VWAP
+    # Trigger logic requires high score AND price ABOVE VWAP
     if final_score >= 75 and data['price'] > data['vwap']:
         status = "🔴 TRIGGER"
-        status_msg = "Stock is extended ABOVE VWAP showing initial exhaustion. Ideal fade location."
+        status_msg = "Stock is up >100% and extended ABOVE VWAP. Ideal single-day fade location."
     elif final_score >= 55:
         status = "🟡 ARMED"
-        status_msg = "Extended setup building. Watch price action around VWAP for entry."
+        status_msg = "Parabolic extension active. Monitor price action above VWAP for top exhaustion."
     else:
         status = "⚪ CANDIDATE"
-        status_msg = "Setup lacks parabolic extension or is already dumped below VWAP."
+        status_msg = "Lacks 100%+ extension or is already dumped below VWAP."
 
     return {
         "final_score": final_score,
         "status": status,
         "status_msg": status_msg,
         "boosters": boosters,
-        "penalties": penalties
+        "penalties": penalties,
+        "vwap_diff": vwap_diff
     }
 
 # --- USER INPUT ---
 col_input, col_btn = st.columns([3, 1])
 with col_input:
-    ticker_input = st.text_input("Enter Stock Ticker:", "SDOT").strip().upper()
+    ticker_input = st.text_input("Enter Stock Ticker:", "CHAI").strip().upper()
 with col_btn:
     st.write(" ")
-    analyze_click = st.button("Analyze Stock", width="stretch")
+    analyze_click = st.button("Analyze Stock", use_container_width=True)
 
 if ticker_input or analyze_click:
-    with st.spinner(f"Loading 10-day market & extended-hours data for {ticker_input}..."):
+    with st.spinner(f"Fetching market data for {ticker_input}..."):
         data = fetch_stock_data(ticker_input)
 
     if not data:
@@ -170,10 +190,10 @@ if ticker_input or analyze_click:
         m3.metric("Current Price", f"${data['price']:.2f}", f"{data['gain_24h']*100:+.1f}%")
         m4.metric("Borrow Outlook", borrow_status)
 
-        st.info(f"**State Summary:** {eval_res['status_msg']}")
+        st.info(f"**State Summary:** {eval_res['status_msg']} *(Session Date: {data['trade_date']})*")
 
         # --- 10-DAY EXTENDED HOURS PLOTLY CHART ---
-        st.subheader("📈 10-Day Intraday Chart (Includes Extended Hours)")
+        st.subheader("📈 10-Day Intraday Baseline Chart (Pre/Post Market Included)")
         
         hist_df = data['hist_10d']
         fig = go.Figure()
@@ -216,7 +236,7 @@ if ticker_input or analyze_click:
             )
         )
 
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
         # TECHNICAL BREAKDOWN
         st.subheader("📊 Intraday Metric Breakdown")
@@ -228,12 +248,11 @@ if ticker_input or analyze_click:
         d2.write(f"**Spike Rejection:** {data['rejection_pct']*100:.1f}%")
 
         vwap_relation = "ABOVE 🟢" if data['price'] > data['vwap'] else "BELOW 🔴"
-        vwap_diff = ((data['price'] - data['vwap']) / data['vwap']) * 100
-        d3.write(f"**Today VWAP:** ${data['vwap']:.2f} ({vwap_relation} {vwap_diff:+.1f}%)")
+        d3.write(f"**Today VWAP:** ${data['vwap']:.2f} ({vwap_relation} {eval_res['vwap_diff']:+.1f}%)")
         d3.write(f"**RVOL Proxy:** {data['rvol']:.1f}x")
 
         float_str = f"{data['float_shares']/1e6:.1f}M" if data['float_shares'] else "N/A"
-        d4.write(f"**Estimated Float:** {float_str}")
+        d4.write(f"**Float Size:** {float_str}")
         d4.write(f"**Borrow Note:** {borrow_reason}")
 
         st.divider()
