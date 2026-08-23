@@ -88,7 +88,7 @@ if API_KEY:
         
         st.dataframe(
             display_df[existing_cols], 
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
     elif data is not None and data.empty:

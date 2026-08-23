@@ -140,7 +140,7 @@ def main():
             
             # Display the consolidated DataFrame
             st.subheader("Consolidated Transactions Data")
-            st.dataframe(all_transactions, use_container_width=True)
+            st.dataframe(all_transactions, width="stretch")
 
             # Calculate total amounts per category per month
             monthly_summary = all_transactions.groupby(["Month", "Category"])["Amount"].sum().reset_index()

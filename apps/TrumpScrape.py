@@ -112,7 +112,7 @@ if uploaded_files:
         st.write(f"Extracted {len(df_new)} posts from this file.")
 
         # Show ALL rows
-        st.dataframe(df_new, use_container_width=True, height=600)
+        st.dataframe(df_new, width="stretch", height=600)
 
         all_new_rows.append(df_new)
 
@@ -123,7 +123,7 @@ if uploaded_files:
         st.write(f"Total new extracted posts (before dedupe vs repository): {len(df_new_all)}")
 
         # Show ALL rows
-        st.dataframe(df_new_all, use_container_width=True, height=600)
+        st.dataframe(df_new_all, width="stretch", height=600)
 
         # Load master, merge, dedupe
         master = load_master()
@@ -140,7 +140,7 @@ if uploaded_files:
         st.write(f"Repository now contains {len(combined)} total posts.")
 
         # Show ALL rows of master
-        st.dataframe(combined, use_container_width=True, height=600)
+        st.dataframe(combined, width="stretch", height=600)
 
         # Download buttons
         st.download_button(

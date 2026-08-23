@@ -147,7 +147,7 @@ with col_input:
     ticker_input = st.text_input("Enter Stock Ticker:", "SDOT").strip().upper()
 with col_btn:
     st.write(" ")
-    analyze_click = st.button("Analyze Stock", use_container_width=True)
+    analyze_click = st.button("Analyze Stock", width="stretch")
 
 if ticker_input or analyze_click:
     with st.spinner(f"Loading 10-day market & extended-hours data for {ticker_input}..."):
@@ -216,7 +216,7 @@ if ticker_input or analyze_click:
             )
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # TECHNICAL BREAKDOWN
         st.subheader("📊 Intraday Metric Breakdown")
