@@ -1,8 +1,48 @@
+import re
+
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import requests
+
+TOP_GAINERS_URL = "https://stockanalysis.com/markets/gainers/"
+
+
+@st.cache_data(ttl=300)
+def get_top_gainers(limit: int = 10) -> list[str]:
+    """Fetch the current top 10 gainers from StockAnalysis and return their ticker symbols."""
+    try:
+        response = requests.get(
+            TOP_GAINERS_URL,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response.raise_for_status()
+        page_text = response.text
+
+        matches = re.findall(
+            r"\|\s*(?:\d+)\s*\|\s*([A-Z]{1,6})\s*\|",
+            page_text,
+            flags=re.IGNORECASE,
+        )
+
+        symbols = []
+        seen = set()
+        for symbol in matches:
+            symbol = symbol.strip().upper()
+            if symbol and symbol not in seen:
+                seen.add(symbol)
+                symbols.append(symbol)
+
+        if len(symbols) >= limit:
+            return symbols[:limit]
+    except Exception:
+        pass
+
+    # Fallback if the site is unavailable or parsing fails.
+    return ["RFAI", "HOWL", "USDE", "KNRX", "SDOT", "EXYN", "LSTA", "AMCI", "NCTY", "CANG"]
 
 st.set_page_config(page_title="Single-Day Parabolic Short Inspector", layout="wide")
 st.title("📉 Single-Ticker Parabolic Short Inspector")
@@ -162,12 +202,19 @@ def calculate_short_score(data: dict) -> dict:
     }
 
 # --- USER INPUT ---
+refresh_button = st.button("Refresh Top Gainers", type="secondary")
+if refresh_button:
+    st.cache_data.clear()
+
+with st.spinner("Loading top gainers..."):
+    top_tickers = get_top_gainers()
+
 col_input, col_btn = st.columns([3, 1])
 with col_input:
-    ticker_input = st.text_input("Enter Stock Ticker:", "CHAI").strip().upper()
+    ticker_input = st.selectbox("Select Top Gainer:", options=top_tickers, index=0)
 with col_btn:
     st.write(" ")
-    analyze_click = st.button("Analyze Stock", use_container_width=True)
+    analyze_click = st.button("Analyze Stock", width="stretch")
 
 if ticker_input or analyze_click:
     with st.spinner(f"Fetching market data for {ticker_input}..."):
@@ -236,7 +283,7 @@ if ticker_input or analyze_click:
             )
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # TECHNICAL BREAKDOWN
         st.subheader("📊 Intraday Metric Breakdown")
