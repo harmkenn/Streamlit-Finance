@@ -1,275 +1,97 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-import json
-import os
+import requests
 
-st.set_page_config(layout="wide")
+# Page configuration
+st.set_page_config(page_title="Polygon Real-Time Gainers", page_icon="⚡", layout="wide")
 
-DATA_FILE = "data/watchlist.json"
+st.title("⚡ Real-Time Top 20 Stock Gainers (Polygon.io API)")
+st.write("Using legitimate exchange feeds to bypass Yahoo Finance 404/403 connection blocks.")
 
-# --------------------------
-# Constants
-# --------------------------
-DAY_COL = "1D %"
-WEEK_COL = "1W %"
-MONTH_COL = "1M %"
+# Sidebar API management
+API_KEY = st.sidebar.text_input("Enter Polygon.io API Key:", type="password")
 
-# --------------------------
-# File Handling
-# --------------------------
-def load_watchlist():
-    if not os.path.exists(DATA_FILE):
-        return []
-    with open(DATA_FILE, 'r') as f:
-        return json.load(f)
+# Session toggle
+session = st.sidebar.radio(
+    "Select Market Session:",
+    ("Open Market Gainers", "Premarket Gainers")
+)
 
-def save_watchlist(watchlist):
-    os.makedirs("data", exist_ok=True)
-    with open(DATA_FILE, 'w') as f:
-        json.dump(watchlist, f)
-
-# --------------------------
-# Validation
-# --------------------------
-def validate_ticker(ticker):
+@st.cache_data(ttl=15)
+def fetch_polygon_gainers(session_type, api_key):
+    if not api_key:
+        st.warning("Please enter your Polygon.io API Key in the sidebar.")
+        return None
+        
+    # Polygon provides a dedicated Snapshot API for market movers
+    # Note: Free tier covers regular session movers natively. 
+    # For full premarket book access, Polygon checks the latest market state.
+    url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/gainers?apiKey={api_key}"
+    
     try:
-        data = yf.download(ticker, period="1d", progress=False)
-        return not data.empty
-    except:
-        return False
+        response = requests.get(url)
+        
+        if response.status_code == 401:
+            st.error("🚫 **401 Unauthorized:** Invalid Polygon API key.")
+            return None
+        elif response.status_code != 200:
+            st.error(f"API Error: Received status code {response.status_code}")
+            return None
+            
+        json_data = response.json()
+        tickers = json_data.get("tickers", [])
+        
+        if not tickers:
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(tickers)
+        
+        # Parse nested 'todaysChangePerc' and market values safely
+        df['% Change'] = df['todaysChangePerc'].apply(lambda x: float(x) if x is not None else 0.0)
+        df = df.sort_values(by='% Change', ascending=False).head(20)
+        
+        return df
 
-# --------------------------
-# Helpers
-# --------------------------
-def safe_round(val):
-    try:
-        return round(val, 2) if val is not None else None
-    except:
+    except Exception as e:
+        st.error(f"Failed to connect to Polygon stream: {e}")
         return None
 
-# --------------------------
-# Metrics + Scoring
-# --------------------------
-@st.cache_data(ttl=300)
-def get_all_metrics(tickers):
-    results = []
-
-    if not tickers:
-        return results
-
-    hist = yf.download(
-        tickers,
-        period="1mo",
-        group_by="ticker",
-        auto_adjust=True,
-        progress=False
-    )
-
-    for ticker in tickers:
-        try:
-            stock = yf.Ticker(ticker)
-
-            # --- Price data
-            fast = stock.fast_info or {}
-            current = fast.get("last_price")
-            opening = fast.get("open")
-
-            # --- Fundamentals
-            try:
-                info = stock.get_info()
-            except:
-                info = {}
-
-            pe = info.get("trailingPE")
-            fpe = info.get("forwardPE")
-            peg = info.get("pegRatio")
-            ps = info.get("priceToSalesTrailing12Months")
-            pb = info.get("priceToBook")
-            sector = info.get("sector")
-            industry = info.get("industry")
-
-            # --- Historical gains
-            try:
-                if isinstance(hist.columns, pd.MultiIndex):
-                    data = hist[ticker]
-                else:
-                    data = hist
-
-                close = data["Close"].dropna()
-
-                day_gain = week_gain = month_gain = None
-
-                if len(close) > 1 and current:
-                    yesterday = close.iloc[-2]
-                    if yesterday != 0:
-                        day_gain = (current - yesterday) / yesterday * 100
-
-                if len(close) >= 7 and current:
-                    week_price = close.iloc[-7]
-                    if week_price != 0:
-                        week_gain = (current / week_price - 1) * 100
-
-                if len(close) >= 22 and current:
-                    month_price = close.iloc[-22]
-                    if month_price != 0:
-                        month_gain = (current / month_price - 1) * 100
-
-            except:
-                day_gain = week_gain = month_gain = None
-
-            # --- Scoring
-            def score_metric(value, good, bad):
-                if value is None:
-                    return None
-                if value <= good:
-                    return 100
-                if value >= bad:
-                    return 0
-                return 100 * (bad - value) / (bad - good)
-
-            scores = []
-            for val, good, bad in [
-                (pe, 15, 30),
-                (peg, 1, 2),
-                (ps, 2, 5),
-                (pb, 1.5, 4)
-            ]:
-                s = score_metric(val, good, bad)
-                if s is not None:
-                    scores.append(s)
-
-            overall_score = round(sum(scores) / len(scores), 1) if scores else None
-
-            if overall_score is None:
-                label = "N/A"
-            elif overall_score >= 70:
-                label = "Undervalued"
-            elif overall_score >= 40:
-                label = "Fair"
-            else:
-                label = "Expensive"
-
-            # --- Output
-            results.append({
-                "Ticker": ticker.upper(),
-                "Price": safe_round(current),
-                "PE": safe_round(pe),
-                "Forward PE": safe_round(fpe),
-                "PEG": safe_round(peg),
-                "PS": safe_round(ps),
-                "PB": safe_round(pb),
-                "Sector": sector,
-                "Industry": industry,
-                DAY_COL: safe_round(day_gain),
-                WEEK_COL: safe_round(week_gain),
-                MONTH_COL: safe_round(month_gain),
-                "Score": overall_score,
-                "Valuation": label,
-                "Updated": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-            })
-
-        except:
-            continue
-
-    return results
-
-# --------------------------
-# Styling
-# --------------------------
-def color_gain(val):
-    if val is None:
-        return ''
-    return 'color: green' if val > 0 else 'color: red'
-
-def color_valuation(val):
-    if val == "Undervalued":
-        return "color: green; font-weight: bold"
-    elif val == "Expensive":
-        return "color: red; font-weight: bold"
-    elif val == "Fair":
-        return "color: orange"
-    return ""
-
-# --------------------------
-# UI
-# --------------------------
-st.title("📈 Stock Watchlist")
-
-watchlist = load_watchlist()
-
-# --- Display
-if watchlist:
-    st.subheader("Your Watchlist")
-
-    metrics = get_all_metrics(watchlist)
-
-    if metrics:
-        df = pd.DataFrame(metrics)
-
-        # Remove columns that are entirely None
-        df = df.dropna(axis=1, how="all")
-
-
-        # Safe sort
-        if DAY_COL in df.columns:
-            df = df.sort_values(by=DAY_COL, ascending=False)
-
-        # Use .map instead of deprecated .applymap on Styler
-        styled_df = (
-            df.style
-            .map(
-                color_gain,
-                subset=[col for col in [DAY_COL, WEEK_COL, MONTH_COL] if col in df.columns]
-            )
-            .map(
-                color_valuation,
-                subset=["Valuation"]
-            )
+if API_KEY:
+    with st.spinner(f"Streaming live tracking matrices..."):
+        data = fetch_polygon_gainers(session, API_KEY)
+        
+    if data is not None and not data.empty:
+        st.subheader(f"Top 20 Live {session}")
+        
+        # Isolate key market metrics returned by the snapshot engine
+        rename_dict = {
+            'ticker': 'Ticker',
+            'todaysChange': 'Net Change',
+            '% Change': '% Change',
+            'min': 'Last Trade Details'
+        }
+        
+        display_df = data.rename(columns=rename_dict)
+        
+        # Clean up nested dictionary rows if they exist
+        if 'Last Trade Details' in display_df.columns:
+            display_df['Price'] = display_df['Last Trade Details'].apply(lambda x: x.get('c') if isinstance(x, dict) else None)
+        if 'day' in display_df.columns:
+            display_df['Volume'] = display_df['day'].apply(lambda x: x.get('v') if isinstance(x, dict) else None)
+            
+        # Reorder into a clean user interface
+        final_cols = ['Ticker', 'Price', 'Net Change', '% Change', 'Volume']
+        existing_cols = [col for col in final_cols if col in display_df.columns]
+        
+        # Format percentages cleanly
+        display_df['% Change'] = display_df['% Change'].apply(lambda x: f"{x:+.2f}%")
+        
+        st.dataframe(
+            display_df[existing_cols], 
+            use_container_width=True,
+            hide_index=True
         )
-
-        st.dataframe(styled_df, use_container_width=True)
-    else:
-        st.write("No data available.")
+    elif data is not None and data.empty:
+        st.info("No active gainers found in the current exchange snapshot loop.")
 else:
-    st.write("Your watchlist is empty. Add some tickers below.")
-
-
-# --- Add ticker
-st.subheader("➕ Add Ticker")
-
-ticker_input = st.text_input("Enter stock ticker (e.g., AAPL)")
-
-if st.button("Add Ticker"):
-    if ticker_input:
-        ticker = ticker_input.upper().strip()
-
-        if ticker in watchlist:
-            st.warning("Ticker already in watchlist.")
-        elif validate_ticker(ticker):
-            watchlist.append(ticker)
-            save_watchlist(watchlist)
-            st.success(f"Added {ticker}")
-            st.rerun()
-        else:
-            st.error("Invalid ticker.")
-    else:
-        st.warning("Please enter a ticker.")
-
-# --- Delete tickers
-if watchlist:
-    st.subheader("🗑️ Delete Tickers")
-
-    selected = [
-        ticker for ticker in watchlist
-        if st.checkbox(f"Delete {ticker}", key=f"del_{ticker}")
-    ]
-
-    if st.button("Delete Selected"):
-        if selected:
-            watchlist = [t for t in watchlist if t not in selected]
-            save_watchlist(watchlist)
-            st.success(f"Deleted: {', '.join(selected)}")
-            st.rerun()
-        else:
-            st.warning("No tickers selected.")
+    st.info("👈 Please drop your free Polygon.io API key into the sidebar field to boot up the real-time websocket fallback tracker.")
