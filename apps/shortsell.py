@@ -27,7 +27,6 @@ def resolve_market_source_url(now: datetime | None = None) -> str:
 
 @st.cache_data(ttl=300)
 def get_top_gainers(limit: int = 10) -> list[str]:
-    """Fetch the current top gainers from the correct StockAnalysis page and return their ticker symbols."""
     target_url = resolve_market_source_url()
     try:
         response = requests.get(
@@ -52,13 +51,26 @@ def get_top_gainers(limit: int = 10) -> list[str]:
                 seen.add(symbol)
                 symbols.append(symbol)
 
-        if len(symbols) >= limit:
-            return symbols[:limit]
+        # --- PRICE FILTER: remove stocks under $0.90 ---
+        filtered = []
+        for sym in symbols:
+            try:
+                price = yf.Ticker(sym).history(period="1d")["Close"].iloc[-1]
+                if price >= 0.90:
+                    filtered.append(sym)
+            except Exception:
+                continue
+
+        if len(filtered) >= limit:
+            return filtered[:limit]
+        return filtered
+
     except Exception:
         pass
 
-    # Fallback if the site is unavailable or parsing fails.
+    # Fallback list (you can also filter this if desired)
     return ["RFAI", "HOWL", "USDE", "KNRX", "SDOT", "EXYN", "LSTA", "AMCI", "NCTY", "CANG"]
+
 
 st.set_page_config(page_title="Single-Day Parabolic Short Inspector", layout="wide")
 st.title("📉 Single-Ticker Parabolic Short Inspector")
