@@ -1,64 +1,20 @@
-import re
-from datetime import datetime, time
-from zoneinfo import ZoneInfo
+import os
 
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import requests
 
-PREMARKET_URL = "https://stockanalysis.com/markets/premarket/"
-TOP_GAINERS_URL = "https://stockanalysis.com/markets/gainers/"
+TICKERS_FILE = os.path.join(os.path.dirname(__file__), "..", "tickers.txt")
 
 
-def resolve_market_source_url(now: datetime | None = None) -> str:
-    """Use the premarket list from 4:00 a.m. ET to 9:30 a.m. ET on weekdays; otherwise use the regular gainers list."""
-    current_time = now or datetime.now(ZoneInfo("America/New_York"))
-    is_weekday = current_time.weekday() < 5
-    market_open = time(9, 30)
-    premarket_start = time(4, 0)
-
-    if is_weekday and premarket_start <= current_time.timetz() < market_open:
-        return PREMARKET_URL
-    return TOP_GAINERS_URL
-
-
-@st.cache_data(ttl=300)
-def get_top_gainers(limit: int = 10) -> list[str]:
-    """Fetch the current top gainers from the correct StockAnalysis page and return their ticker symbols."""
-    target_url = resolve_market_source_url()
-    try:
-        response = requests.get(
-            target_url,
-            timeout=15,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        response.raise_for_status()
-        page_text = response.text
-
-        matches = re.findall(
-            r"\|\s*(?:\d+)\s*\|\s*([A-Z]{1,6})\s*\|",
-            page_text,
-            flags=re.IGNORECASE,
-        )
-
-        symbols = []
-        seen = set()
-        for symbol in matches:
-            symbol = symbol.strip().upper()
-            if symbol and symbol not in seen:
-                seen.add(symbol)
-                symbols.append(symbol)
-
-        if len(symbols) >= limit:
-            return symbols[:limit]
-    except Exception:
-        pass
-
-    # Fallback if the site is unavailable or parsing fails.
-    return ["RFAI", "HOWL", "USDE", "KNRX", "SDOT", "EXYN", "LSTA", "AMCI", "NCTY", "CANG"]
+def get_configured_tickers() -> list[str]:
+    """Read the workspace ticker list from the shared tickers.txt file."""
+    if os.path.exists(TICKERS_FILE):
+        with open(TICKERS_FILE, "r", encoding="utf-8") as f:
+            return [t.strip().upper() for t in f.read().split(",") if t.strip()]
+    return ["TQQQ", "UPRO", "UDOW", "^VIX", "SPHY"]
 
 st.set_page_config(page_title="Single-Day Parabolic Short Inspector", layout="wide")
 st.title("📉 Single-Ticker Parabolic Short Inspector")
@@ -218,16 +174,11 @@ def calculate_short_score(data: dict) -> dict:
     }
 
 # --- USER INPUT ---
-refresh_button = st.button("Refresh Top Gainers", type="secondary")
-if refresh_button:
-    st.cache_data.clear()
-
-with st.spinner("Loading top gainers..."):
-    top_tickers = get_top_gainers()
+configured_tickers = get_configured_tickers()
 
 col_input, col_btn = st.columns([3, 1])
 with col_input:
-    ticker_input = st.selectbox("Select Top Gainer:", options=top_tickers, index=0)
+    ticker_input = st.selectbox("Select Ticker:", options=configured_tickers, index=0 if configured_tickers else None)
 with col_btn:
     st.write(" ")
     analyze_click = st.button("Analyze Stock", width="stretch")
