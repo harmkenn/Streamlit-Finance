@@ -5,26 +5,46 @@ from bs4 import BeautifulSoup
 from streamlit_autorefresh import st_autorefresh
 
 # Page Setup
-st.set_page_config(page_title="Premarket Top 10 Scraper", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Stock Market Top 10 Tracker", page_icon="📈", layout="wide")
 
-st.title("📊 Premarket Top 10 Gainers")
+st.title("📈 Stock Analysis - Top 10 Data Tracker")
 
-# Auto-refresh timer every 60 seconds (60,000 milliseconds)
-count = st_autorefresh(interval=60 * 1000, key="premarket_scraper")
+# Target Page Selection
+PAGES = {
+    "Premarket Movers": "https://stockanalysis.com/markets/premarket/",
+    "Top Daily Gainers": "https://stockanalysis.com/markets/gainers/"
+}
 
 # Sidebar Controls
-st.sidebar.header("Settings")
-st.sidebar.write(f"**Auto-Refresh Interval:** 60 Seconds")
-st.sidebar.write(f"**Total Refreshes:** {count}")
+st.sidebar.header("⚙️ Settings")
 
-if st.sidebar.button("Force Manual Refresh"):
+selected_page_name = st.sidebar.selectbox(
+    "Select Market View:",
+    options=list(PAGES.keys())
+)
+
+refresh_seconds = st.sidebar.number_input(
+    "Refresh Interval (seconds):",
+    min_value=10,
+    max_value=600,
+    value=60,
+    step=5
+)
+
+# Auto-refresh timer
+refresh_count = st_autorefresh(
+    interval=refresh_seconds * 1000, 
+    key=f"stock_tracker_{selected_page_name.lower().replace(' ', '_')}"
+)
+
+st.sidebar.write(f"**Total Refreshes:** {refresh_count}")
+
+if st.sidebar.button("Force Manual Refresh", use_container_width=True):
     st.rerun()
 
-@st.cache_data(ttl=55)
-def scrape_premarket_top10():
-    url = "https://stockanalysis.com/markets/premarket/"
-    
-    # Custom headers to emulate standard browser request
+# Data Scraping Function
+@st.cache_data(ttl=refresh_seconds - 5)
+def scrape_stock_top10(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
@@ -39,12 +59,12 @@ def scrape_premarket_top10():
         if not table:
             return None, "Table element not found on the target page."
 
-        # Extract column headers
+        # Extract table headers
         headers_list = [th.text.strip() for th in table.find_all("th")]
         
-        # Extract rows
+        # Extract top 10 rows
         rows = []
-        for tr in table.find_all("tr")[1:11]:  # Get top 10 items
+        for tr in table.find_all("tr")[1:11]:
             cells = [td.text.strip() for td in tr.find_all("td")]
             if cells:
                 rows.append(cells)
@@ -52,18 +72,20 @@ def scrape_premarket_top10():
         if not rows:
             return None, "No data rows found in the table."
             
-        # Format into Pandas DataFrame
         df = pd.DataFrame(rows, columns=headers_list if headers_list else None)
         return df, None
 
     except Exception as e:
         return None, str(e)
 
-# Fetch data
-df, error = scrape_premarket_top10()
+# Fetch and Render Data
+target_url = PAGES[selected_page_name]
+st.subheader(f"Showing Top 10: {selected_page_name}")
+
+df, error = scrape_stock_top10(target_url)
 
 if error:
-    st.error(f"Error scraping data: {error}")
+    st.error(f"Error fetching data: {error}")
 else:
-    st.success(f"Last updated successfully! Auto-refreshing in 60s...")
+    st.success(f"Updated successfully! Auto-refreshing every {refresh_seconds} seconds.")
     st.dataframe(df, use_container_width=True, hide_index=True)
