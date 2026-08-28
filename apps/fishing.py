@@ -65,7 +65,7 @@ def scrape_stock_top10(url):
         table = soup.find("table")
         
         if not table:
-            return None, "Table element not found on the target page."
+            return None
 
         # Extract table headers
         headers_list = [th.text.strip() for th in table.find_all("th")]
@@ -78,20 +78,16 @@ def scrape_stock_top10(url):
                 rows.append(cells)
                 
         if not rows:
-            return None, "No data rows found in the table."
+            return None
             
         df = pd.DataFrame(rows, columns=headers_list if headers_list else None)
-        return df, None
+        return df
 
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        return None
 
-# Row Highlighting Helper
+# Row Highlighting Helper (High contrast background + bold white text)
 def highlight_high_gainers(row, threshold):
-    """
-    Highlights the entire row with a dark green background and bold white text 
-    so the words remain easily readable in light and dark themes.
-    """
     change_col = next((col for col in row.index if "%" in col or "Change" in col), None)
     
     if change_col and pd.notna(row[change_col]):
@@ -100,24 +96,19 @@ def highlight_high_gainers(row, threshold):
             val = float(clean_val)
             
             if val > threshold:
-                # Dark green background (#1b5e20) with crisp white bold text
                 return ["background-color: #1b5e20; color: #ffffff; font-weight: bold;"] * len(row)
         except ValueError:
             pass
             
     return [""] * len(row)
 
-# Fetch and Render Data
+# Fetch Data
 target_url = PAGES[selected_page_name]
 st.subheader(f"Showing Top 10: {selected_page_name}")
 
-df, error = scrape_stock_top10(target_url)
+df = scrape_stock_top10(target_url)
 
-if error: st.error(f"Error fetching data: {error}")
-
-    
-    # Apply row highlighting via Pandas Styler
+# Display table if data is available
+if df is not None:
     styled_df = df.style.apply(highlight_high_gainers, threshold=threshold_pct, axis=1)
-    
-    # Display styled table
     st.dataframe(styled_df, use_container_width=True, hide_index=True)
