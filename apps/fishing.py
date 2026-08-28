@@ -17,7 +17,7 @@ with st.sidebar:
     # Target URL input
     target_url = st.text_input(
         "Enter Target URL:",
-        value="https://example.com",
+        value="https://stockanalysis.com/markets/premarket/",
         help="Make sure the site allows iframe embedding (some sites block it via X-Frame-Options)."
     )
     
