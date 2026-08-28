@@ -86,7 +86,7 @@ def scrape_stock_top10(url):
     except Exception:
         return None
 
-# Row Highlighting Helper (High contrast background + bold white text)
+# Row Highlighting Helper (High contrast dark green background + bold white text)
 def highlight_high_gainers(row, threshold):
     change_col = next((col for col in row.index if "%" in col or "Change" in col), None)
     
@@ -108,7 +108,32 @@ st.subheader(f"Showing Top 10: {selected_page_name}")
 
 df = scrape_stock_top10(target_url)
 
-# Display table if data is available
 if df is not None:
+    # Identify symbol column name (usually 'Symbol' or 'Ticker')
+    symbol_col = next((col for col in df.columns if "symbol" in col.lower() or "ticker" in col.lower()), df.columns[0])
+    
+    # Generate full target URLs for the LinkColumn
+    df["Symbol_URL"] = df[symbol_col].apply(lambda s: f"https://stockanalysis.com/stocks/{str(s).lower()}/")
+    
+    # Reorder columns so Symbol_URL is rendered in place of the original Symbol column
+    cols = list(df.columns)
+    cols.remove("Symbol_URL")
+    sym_idx = cols.index(symbol_col)
+    cols[sym_idx] = "Symbol_URL"
+    df = df[cols]
+    
+    # Apply styling rules
     styled_df = df.style.apply(highlight_high_gainers, threshold=threshold_pct, axis=1)
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    
+    # Render table with LinkColumn configuration
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Symbol_URL": st.column_config.LinkColumn(
+                label=symbol_col,
+                display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
+            )
+        }
+    )
