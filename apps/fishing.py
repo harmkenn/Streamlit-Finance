@@ -31,6 +31,14 @@ refresh_seconds = st.sidebar.number_input(
     step=5
 )
 
+threshold_pct = st.sidebar.number_input(
+    "Highlight Threshold (%):",
+    min_value=0.0,
+    max_value=1000.0,
+    value=150.0,
+    step=10.0
+)
+
 # Auto-refresh timer
 refresh_count = st_autorefresh(
     interval=refresh_seconds * 1000, 
@@ -78,6 +86,27 @@ def scrape_stock_top10(url):
     except Exception as e:
         return None, str(e)
 
+# Row Highlighting Helper
+def highlight_high_gainers(row, threshold):
+    """
+    Highlights the entire row green if the '% Change' column value exceeds the threshold.
+    """
+    # Look for common percentage column headers
+    change_col = next((col for col in row.index if "%" in col or "Change" in col), None)
+    
+    if change_col and pd.notna(row[change_col]):
+        try:
+            # Clean string like "+159.82%" or "150.5%" -> float 159.82
+            clean_val = str(row[change_col]).replace("%", "").replace("+", "").replace(",", "").strip()
+            val = float(clean_val)
+            
+            if val > threshold:
+                return ["background-color: rgba(46, 204, 113, 0.3); color: inherit;"] * len(row)
+        except ValueError:
+            pass
+            
+    return [""] * len(row)
+
 # Fetch and Render Data
 target_url = PAGES[selected_page_name]
 st.subheader(f"Showing Top 10: {selected_page_name}")
@@ -88,4 +117,9 @@ if error:
     st.error(f"Error fetching data: {error}")
 else:
     st.success(f"Updated successfully! Auto-refreshing every {refresh_seconds} seconds.")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # Apply row highlighting via Pandas Styler
+    styled_df = df.style.apply(highlight_high_gainers, threshold=threshold_pct, axis=1)
+    
+    # Display styled table
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
