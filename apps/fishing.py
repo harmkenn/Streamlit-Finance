@@ -1,82 +1,69 @@
 import streamlit as st
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 from streamlit_autorefresh import st_autorefresh
-import time
 
-st.set_page_config(
-    page_title="URL Auto-Refresher",
-    page_icon="🔄",
-    layout="wide"
-)
+# Page Setup
+st.set_page_config(page_title="Premarket Top 10 Scraper", page_icon="📊", layout="wide")
 
-st.title("🔄 Auto-Refreshing Web Viewer")
+st.title("📊 Premarket Top 10 Gainers")
 
-# Sidebar Configuration
-with st.sidebar:
-    st.header("⚙️ Controls")
+# Auto-refresh timer every 60 seconds (60,000 milliseconds)
+count = st_autorefresh(interval=60 * 1000, key="premarket_scraper")
+
+# Sidebar Controls
+st.sidebar.header("Settings")
+st.sidebar.write(f"**Auto-Refresh Interval:** 60 Seconds")
+st.sidebar.write(f"**Total Refreshes:** {count}")
+
+if st.sidebar.button("Force Manual Refresh"):
+    st.rerun()
+
+@st.cache_data(ttl=55)
+def scrape_premarket_top10():
+    url = "https://stockanalysis.com/markets/premarket/"
     
-    # Target URL input
-    target_url = st.text_input(
-        "Enter Target URL:",
-        value="https://stockanalysis.com/markets/premarket/",
-        help="Make sure the site allows iframe embedding (some sites block it via X-Frame-Options)."
-    )
+    # Custom headers to emulate standard browser request
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     
-    # Refresh interval selection
-    refresh_seconds = st.number_input(
-        "Refresh Interval (seconds):",
-        min_value=1,
-        max_value=3600,
-        value=10,
-        step=1
-    )
-    
-    # Toggle to start/stop refreshing
-    auto_refresh_active = st.toggle("Enable Auto-Refresh", value=True)
-    
-    # Manual refresh button
-    if st.button("Force Manual Refresh", use_container_width=True):
-        st.rerun()
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, "html.parser")
+        table = soup.find("table")
+        
+        if not table:
+            return None, "Table element not found on the target page."
 
-    # Frame height adjustment
-    frame_height = st.slider("Frame Height (px):", min_value=300, max_value=1200, value=700, step=50)
+        # Extract column headers
+        headers_list = [th.text.strip() for th in table.find_all("th")]
+        
+        # Extract rows
+        rows = []
+        for tr in table.find_all("tr")[1:11]:  # Get top 10 items
+            cells = [td.text.strip() for td in tr.find_all("td")]
+            if cells:
+                rows.append(cells)
+                
+        if not rows:
+            return None, "No data rows found in the table."
+            
+        # Format into Pandas DataFrame
+        df = pd.DataFrame(rows, columns=headers_list if headers_list else None)
+        return df, None
 
-# Auto-Refresh Logic
-refresh_count = 0
-if auto_refresh_active:
-    # Convert seconds to milliseconds for streamlit-autorefresh
-    refresh_count = st_autorefresh(
-        interval=refresh_seconds * 1000,
-        key="url_refresher_counter"
-    )
+    except Exception as e:
+        return None, str(e)
 
-# Display status metrics
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric("Status", "Refreshing" if auto_refresh_active else "Paused")
-with col2:
-    st.metric("Interval", f"{refresh_seconds}s")
-with col3:
-    st.metric("Total Refreshes", refresh_count)
+# Fetch data
+df, error = scrape_premarket_top10()
 
-# HTML iFrame Renderer
-if target_url:
-    # Append a dynamic timestamp query parameter to bypass browser caching on refresh
-    timestamp = int(time.time() * 1000)
-    delimiter = "&" if "?" in target_url else "?"
-    cache_busted_url = f"{target_url}{delimiter}_refresh={timestamp}"
-
-    # Embed using HTML iframe
-    st.components.v1.html(
-        f"""
-        <iframe 
-            src="{cache_busted_url}" 
-            width="100%" 
-            height="{frame_height}px" 
-            style="border:1px solid #e6e6e6; border-radius: 8px;"
-            allowfullscreen>
-        </iframe>
-        """,
-        height=frame_height + 20
-    )
+if error:
+    st.error(f"Error scraping data: {error}")
 else:
-    st.warning("Please enter a valid URL in the sidebar to begin.")
+    st.success(f"Last updated successfully! Auto-refreshing in 60s...")
+    st.dataframe(df, use_container_width=True, hide_index=True)
