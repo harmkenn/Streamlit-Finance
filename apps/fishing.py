@@ -113,10 +113,8 @@ st.subheader(f"Showing Top 10: {selected_page_name}")
 
 df, error = scrape_stock_top10(target_url)
 
-if error:
-    st.error(f"Error fetching data: {error}")
-else:
-    st.success(f"Updated successfully! Auto-refreshing every {refresh_seconds} seconds.")
+if error: st.error(f"Error fetching data: {error}")
+
     
     # Apply row highlighting via Pandas Styler
     styled_df = df.style.apply(highlight_high_gainers, threshold=threshold_pct, axis=1)
