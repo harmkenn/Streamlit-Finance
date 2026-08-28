@@ -89,19 +89,19 @@ def scrape_stock_top10(url):
 # Row Highlighting Helper
 def highlight_high_gainers(row, threshold):
     """
-    Highlights the entire row green if the '% Change' column value exceeds the threshold.
+    Highlights the entire row with a dark green background and bold white text 
+    so the words remain easily readable in light and dark themes.
     """
-    # Look for common percentage column headers
     change_col = next((col for col in row.index if "%" in col or "Change" in col), None)
     
     if change_col and pd.notna(row[change_col]):
         try:
-            # Clean string like "+159.82%" or "150.5%" -> float 159.82
             clean_val = str(row[change_col]).replace("%", "").replace("+", "").replace(",", "").strip()
             val = float(clean_val)
             
             if val > threshold:
-                return ["background-color: rgba(46, 204, 113, 0.3); color: inherit;"] * len(row)
+                # Dark green background (#1b5e20) with crisp white bold text
+                return ["background-color: #1b5e20; color: #ffffff; font-weight: bold;"] * len(row)
         except ValueError:
             pass
             
