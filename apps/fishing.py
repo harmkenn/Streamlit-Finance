@@ -92,9 +92,9 @@ def scrape_stock_top10(url):
         # Extract table headers
         headers_list = [th.text.strip() for th in table.find_all("th")]
         
-        # Extract top 10 rows
+        # Extract rows (fetch extra rows to preserve 10 items after filtering)
         rows = []
-        for tr in table.find_all("tr")[1:11]:
+        for tr in table.find_all("tr")[1:25]:
             cells = [td.text.strip() for td in tr.find_all("td")]
             if cells:
                 rows.append(cells)
@@ -131,6 +131,22 @@ st.subheader(f"Showing Top 10: {selected_page_name}")
 df = scrape_stock_top10(target_url)
 
 if df is not None:
+    # Identify price column name
+    price_col = next((col for col in df.columns if "price" in col.lower()), None)
+    
+    # Filter out tickers with price < $0.90
+    if price_col:
+        def parse_price(val):
+            try:
+                return float(str(val).replace("$", "").replace(",", "").strip())
+            except ValueError:
+                return 0.0
+                
+        df = df[df[price_col].apply(parse_price) >= 0.90].copy()
+
+    # Limit to top 10 remaining rows after price filtering
+    df = df.head(10)
+
     # Identify symbol column name (usually 'Symbol' or 'Ticker')
     symbol_col = next((col for col in df.columns if "symbol" in col.lower() or "ticker" in col.lower()), df.columns[0])
     
