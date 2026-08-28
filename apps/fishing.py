@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
+import pytz
 
 # Page Setup
 st.set_page_config(page_title="Stock Market Top 10 Tracker", page_icon="📈", layout="wide")
@@ -15,12 +17,32 @@ PAGES = {
     "Top Daily Gainers": "https://stockanalysis.com/markets/gainers/"
 }
 
+# Determine default page based on US Eastern Time (09:30 - 16:00 ET)
+def get_default_page_index():
+    eastern_tz = pytz.timezone("US/Eastern")
+    now_et = datetime.now(eastern_tz)
+    
+    # Check if weekday (0 = Monday, 4 = Friday)
+    is_weekday = now_et.weekday() < 5
+    
+    # Check if time is between 09:30 AM and 04:00 PM Eastern
+    market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    if is_weekday and (market_open <= now_et < market_close):
+        return 1  # Index 1 = "Top Daily Gainers"
+    else:
+        return 0  # Index 0 = "Premarket Movers"
+
+default_index = get_default_page_index()
+
 # Sidebar Controls
 st.sidebar.header("⚙️ Settings")
 
 selected_page_name = st.sidebar.selectbox(
     "Select Market View:",
-    options=list(PAGES.keys())
+    options=list(PAGES.keys()),
+    index=default_index
 )
 
 refresh_seconds = st.sidebar.number_input(
