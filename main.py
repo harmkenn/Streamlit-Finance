@@ -28,6 +28,7 @@ sub_app_names = {
     'shortsell.py': 'Trend',
     'watchlist.py': 'Watchlist',
     'shortsell.py': 'Short Screener',
+    'fishing.py': 'Fishing',
 }
 
 sub_apps_folder = 'apps'
