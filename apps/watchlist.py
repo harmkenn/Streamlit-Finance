@@ -103,26 +103,67 @@ def fetch_watchlist_data(tickers: list[str]) -> pd.DataFrame:
 
 
 # --- Formatting Helpers ---
-def format_mcap(val):
+def _to_float(val):
     if pd.isna(val) or val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def format_mcap(val):
+    numeric_val = _to_float(val)
+    if numeric_val is None:
         return "N/A"
-    if val >= 1e12:
-        return f"${val / 1e12:.2f}T"
-    if val >= 1e9:
-        return f"${val / 1e9:.2f}B"
-    if val >= 1e6:
-        return f"${val / 1e6:.2f}M"
-    return f"${val:,.0f}"
+    if numeric_val >= 1e12:
+        return f"${numeric_val / 1e12:.2f}T"
+    if numeric_val >= 1e9:
+        return f"${numeric_val / 1e9:.2f}B"
+    if numeric_val >= 1e6:
+        return f"${numeric_val / 1e6:.2f}M"
+    return f"${numeric_val:,.0f}"
 
 
 def format_volume(val):
-    if pd.isna(val) or val is None:
+    numeric_val = _to_float(val)
+    if numeric_val is None:
         return "N/A"
-    if val >= 1e6:
-        return f"{val / 1e6:.2f}M"
-    if val >= 1e3:
-        return f"{val / 1e3:.1f}K"
-    return f"{val:,.0f}"
+    if numeric_val >= 1e6:
+        return f"{numeric_val / 1e6:.2f}M"
+    if numeric_val >= 1e3:
+        return f"{numeric_val / 1e3:.1f}K"
+    return f"{numeric_val:,.0f}"
+
+
+def calculate_position_profit(price, avg_cost, shares_owned):
+    price_val = _to_float(price)
+    avg_cost_val = _to_float(avg_cost)
+    shares_val = _to_float(shares_owned)
+    if price_val is None or avg_cost_val is None or shares_val is None:
+        return 0.0
+    return (price_val - avg_cost_val) * shares_val
+
+
+def format_money(val):
+    numeric_val = _to_float(val)
+    if numeric_val is None:
+        return "N/A"
+    return f"${numeric_val:,.2f}"
+
+
+def format_signed_number(val):
+    numeric_val = _to_float(val)
+    if numeric_val is None:
+        return "N/A"
+    return f"{numeric_val:+.2f}"
+
+
+def format_signed_percent(val):
+    numeric_val = _to_float(val)
+    if numeric_val is None:
+        return "N/A"
+    return f"{numeric_val:+.2f}%"
 
 
 def color_changes(val):
@@ -156,7 +197,7 @@ selected_ticker = (
     else st.sidebar.text_input("Enter ticker:").upper()
 )
 
-refresh_sec = st.sidebar.slider("Auto-Refresh Interval (s):", min_value=5, max_value=120, value=15)
+refresh_sec = st.sidebar.slider("Auto-Refresh Interval (s):", min_value=5, max_value=120, value=30)
 st_autorefresh(interval=refresh_sec * 1000, key="watchlist_session_refresh")
 
 if not tickers_list and not selected_ticker:
@@ -180,12 +221,50 @@ tab_overview, tab_performance, tab_fundamentals = st.tabs(
 )
 
 with tab_overview:
-    overview_df = df[["Symbol_URL", "Price", "Change", "% Change", "Volume", "Market Cap"]].copy()
-    overview_df["Market Cap"] = overview_df["Market Cap"].apply(format_mcap)
-    overview_df["Volume"] = overview_df["Volume"].apply(format_volume)
+    overview_df = df[["Symbol_URL", "Price", "Change", "% Change"]].copy()
+    overview_df["Shares Owned"] = 0.0
+    overview_df["Avg Cost"] = 0.0
+    overview_df["Profit"] = 0.0
 
-    styled_overview = overview_df.style.map(color_changes, subset=["Change", "% Change"]).format(
-        {"Price": "${:.2f}", "Change": "{:+.2f}", "% Change": "{:+.2f}%"}
+    edited_overview = st.data_editor(
+        overview_df,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Symbol_URL", "Price", "Change", "% Change", "Profit"],
+        column_config={
+            "Symbol_URL": st.column_config.LinkColumn(
+                label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
+            ),
+            "Shares Owned": st.column_config.NumberColumn(
+                min_value=0.0,
+                step=0.01,
+                format="%.2f",
+            ),
+            "Avg Cost": st.column_config.NumberColumn(
+                min_value=0.0,
+                step=0.01,
+                format="$%.2f",
+            ),
+            "Profit": st.column_config.NumberColumn(
+                label="Profit",
+                format="" + "$%.2f",
+            ),
+        },
+    )
+
+    edited_overview["Profit"] = edited_overview.apply(
+        lambda row: calculate_position_profit(row["Price"], row["Avg Cost"], row["Shares Owned"]),
+        axis=1,
+    )
+
+    styled_overview = edited_overview.style.map(color_changes, subset=["Change", "% Change", "Profit"]).format(
+        {
+            "Price": format_money,
+            "Change": format_signed_number,
+            "% Change": format_signed_percent,
+            "Avg Cost": format_money,
+            "Profit": format_money,
+        }
     )
 
     st.dataframe(
@@ -203,7 +282,12 @@ with tab_performance:
     perf_df = df[["Symbol_URL", "Price", "% Change", "1M %", "YTD %"]].copy()
 
     styled_perf = perf_df.style.map(color_changes, subset=["% Change", "1M %", "YTD %"]).format(
-        {"Price": "${:.2f}", "% Change": "{:+.2f}%", "1M %": "{:+.2f}%", "YTD %": "{:+.2f}%"}
+        {
+            "Price": format_money,
+            "% Change": format_signed_percent,
+            "1M %": format_signed_percent,
+            "YTD %": format_signed_percent,
+        }
     )
 
     st.dataframe(
@@ -222,7 +306,7 @@ with tab_fundamentals:
     fund_df["Market Cap"] = fund_df["Market Cap"].apply(format_mcap)
 
     st.dataframe(
-        fund_df.style.format({"Price": "${:.2f}", "52W High": "${:.2f}", "52W Low": "${:.2f}"}),
+        fund_df.style.format({"Price": format_money, "52W High": format_money, "52W Low": format_money}),
         use_container_width=True,
         hide_index=True,
         column_config={

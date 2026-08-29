@@ -49,7 +49,7 @@ refresh_seconds = st.sidebar.number_input(
     "Refresh Interval (seconds):",
     min_value=10,
     max_value=600,
-    value=60,
+    value=30,
     step=5
 )
 
