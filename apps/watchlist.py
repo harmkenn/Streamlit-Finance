@@ -215,103 +215,59 @@ df["Symbol_URL"] = df["Symbol"].apply(
     lambda s: f"https://stockanalysis.com/stocks/{str(s).replace('^', '').lower()}/"
 )
 
-# Stock Analysis Tabbed Layout
-tab_overview, tab_performance, tab_fundamentals = st.tabs(
-    ["📊 Overview", "🚀 Performance", "🏢 Fundamentals"]
+overview_df = df[["Symbol_URL", "Price", "Change", "% Change"]].copy()
+overview_df["Shares Owned"] = 0.0
+overview_df["Avg Cost"] = 0.0
+overview_df["Profit"] = 0.0
+
+edited_overview = st.data_editor(
+    overview_df,
+    use_container_width=True,
+    hide_index=True,
+    disabled=["Symbol_URL", "Price", "Change", "% Change", "Profit"],
+    column_config={
+        "Symbol_URL": st.column_config.LinkColumn(
+            label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
+        ),
+        "Shares Owned": st.column_config.NumberColumn(
+            min_value=0.0,
+            step=0.01,
+            format="%.2f",
+        ),
+        "Avg Cost": st.column_config.NumberColumn(
+            min_value=0.0,
+            step=0.01,
+            format="$%.2f",
+        ),
+        "Profit": st.column_config.NumberColumn(
+            label="Profit",
+            format="" + "$%.2f",
+        ),
+    },
 )
 
-with tab_overview:
-    overview_df = df[["Symbol_URL", "Price", "Change", "% Change"]].copy()
-    overview_df["Shares Owned"] = 0.0
-    overview_df["Avg Cost"] = 0.0
-    overview_df["Profit"] = 0.0
+edited_overview["Profit"] = edited_overview.apply(
+    lambda row: calculate_position_profit(row["Price"], row["Avg Cost"], row["Shares Owned"]),
+    axis=1,
+)
 
-    edited_overview = st.data_editor(
-        overview_df,
-        use_container_width=True,
-        hide_index=True,
-        disabled=["Symbol_URL", "Price", "Change", "% Change", "Profit"],
-        column_config={
-            "Symbol_URL": st.column_config.LinkColumn(
-                label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
-            ),
-            "Shares Owned": st.column_config.NumberColumn(
-                min_value=0.0,
-                step=0.01,
-                format="%.2f",
-            ),
-            "Avg Cost": st.column_config.NumberColumn(
-                min_value=0.0,
-                step=0.01,
-                format="$%.2f",
-            ),
-            "Profit": st.column_config.NumberColumn(
-                label="Profit",
-                format="" + "$%.2f",
-            ),
-        },
-    )
+styled_overview = edited_overview.style.map(color_changes, subset=["Change", "% Change", "Profit"]).format(
+    {
+        "Price": format_money,
+        "Change": format_signed_number,
+        "% Change": format_signed_percent,
+        "Avg Cost": format_money,
+        "Profit": format_money,
+    }
+)
 
-    edited_overview["Profit"] = edited_overview.apply(
-        lambda row: calculate_position_profit(row["Price"], row["Avg Cost"], row["Shares Owned"]),
-        axis=1,
-    )
-
-    styled_overview = edited_overview.style.map(color_changes, subset=["Change", "% Change", "Profit"]).format(
-        {
-            "Price": format_money,
-            "Change": format_signed_number,
-            "% Change": format_signed_percent,
-            "Avg Cost": format_money,
-            "Profit": format_money,
-        }
-    )
-
-    st.dataframe(
-        styled_overview,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Symbol_URL": st.column_config.LinkColumn(
-                label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
-            )
-        },
-    )
-
-with tab_performance:
-    perf_df = df[["Symbol_URL", "Price", "% Change", "1M %", "YTD %"]].copy()
-
-    styled_perf = perf_df.style.map(color_changes, subset=["% Change", "1M %", "YTD %"]).format(
-        {
-            "Price": format_money,
-            "% Change": format_signed_percent,
-            "1M %": format_signed_percent,
-            "YTD %": format_signed_percent,
-        }
-    )
-
-    st.dataframe(
-        styled_perf,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Symbol_URL": st.column_config.LinkColumn(
-                label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
-            )
-        },
-    )
-
-with tab_fundamentals:
-    fund_df = df[["Symbol_URL", "Price", "52W High", "52W Low", "Market Cap"]].copy()
-    fund_df["Market Cap"] = fund_df["Market Cap"].apply(format_mcap)
-
-    st.dataframe(
-        fund_df.style.format({"Price": format_money, "52W High": format_money, "52W Low": format_money}),
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Symbol_URL": st.column_config.LinkColumn(
-                label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
-            )
-        },
-    )
+st.dataframe(
+    styled_overview,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Symbol_URL": st.column_config.LinkColumn(
+            label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
+        )
+    },
+)
