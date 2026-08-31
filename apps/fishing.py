@@ -108,20 +108,22 @@ def scrape_stock_top10(url):
     except Exception:
         return None
 
-# Row Highlighting Helper (High contrast dark green background + bold white text)
+# Row Highlighting Helper (yellow at 100%, green at 150%+)
 def highlight_high_gainers(row, threshold):
     change_col = next((col for col in row.index if "%" in col or "Change" in col), None)
-    
+
     if change_col and pd.notna(row[change_col]):
         try:
             clean_val = str(row[change_col]).replace("%", "").replace("+", "").replace(",", "").strip()
             val = float(clean_val)
-            
-            if val > threshold:
+
+            if val >= 150.0:
                 return ["background-color: #1b5e20; color: #ffffff; font-weight: bold;"] * len(row)
+            elif val >= 100.0:
+                return ["background-color: #f4d03f; color: #000000; font-weight: bold;"] * len(row)
         except ValueError:
             pass
-            
+
     return [""] * len(row)
 
 # Fetch Data
