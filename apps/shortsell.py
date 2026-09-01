@@ -486,10 +486,20 @@ if ticker_input or analyze_click:
 
         # --- 10-DAY EXTENDED HOURS PLOTLY CHART ---
         st.subheader(
-            "📈 10-Day Intraday Baseline Chart (Pre/Post Market Included)"
+            "📈 10-Day Intraday Baseline Chart (Pre/Post Market Highlighted)"
         )
 
-        hist_df = data["hist_10d"]
+        hist_df = data["hist_10d"].copy()
+
+        # Convert index to US/Eastern for accurate time-of-day shading
+        eastern_tz = pytz.timezone("US/Eastern")
+        if hist_df.index.tz is None:
+            hist_df.index = hist_df.index.tz_localize("UTC").tz_convert(
+                eastern_tz
+            )
+        else:
+            hist_df.index = hist_df.index.tz_convert(eastern_tz)
+
         fig = go.Figure()
 
         # Intraday Price Line
@@ -519,14 +529,58 @@ if ticker_input or analyze_click:
             annotation_text=f"Today's VWAP (${data['vwap']:.2f})",
         )
 
+        # SHADING PREMARKET & AFTERMARKET SESSIONS
+        unique_dates = sorted(list(set(hist_df.index.date)))
+
+        for d in unique_dates:
+            # Premarket: 04:00 to 09:30 Eastern
+            pm_start = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=4, minute=0
+                )
+            )
+            pm_end = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=9, minute=30
+                )
+            )
+
+            # Aftermarket: 16:00 to 20:00 Eastern
+            am_start = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=16, minute=0
+                )
+            )
+            am_end = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=20, minute=0
+                )
+            )
+
+            fig.add_vrect(
+                x0=pm_start,
+                x1=pm_end,
+                fillcolor="rgba(255, 215, 0, 0.08)",  # Soft Gold for Premarket
+                layer="below",
+                line_width=0,
+            )
+
+            fig.add_vrect(
+                x0=am_start,
+                x1=am_end,
+                fillcolor="rgba(138, 43, 226, 0.12)",  # Soft Purple for Afterhours
+                layer="below",
+                line_width=0,
+            )
+
         fig.update_layout(
             template="plotly_dark",
             height=450,
-            xaxis_title="Date/Time",
+            xaxis_title="Date/Time (US/Eastern)",
             yaxis_title="Stock Price ($)",
             margin=dict(l=20, r=20, t=30, b=20),
             hovermode="x unified",
-            xaxis=dict(type="category", nticks=10),
+            xaxis=dict(type="date", nticks=10),
         )
 
         st.plotly_chart(fig, width="stretch")
@@ -613,7 +667,6 @@ if ticker_input or analyze_click:
         with col_checklist:
             st.markdown("#### 📋 Short Candidate Target Criteria")
 
-            # Corrected inline conditionals
             z_match = (
                 "✅ Match"
                 if (data["z_score"] is not None and data["z_score"] < 1.8)
