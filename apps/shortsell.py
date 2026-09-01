@@ -20,7 +20,7 @@ def get_configured_tickers() -> list[str]:
 
 st.set_page_config(
     page_title="Single-Day Parabolic Short Inspector",
-    page_icon="📉",
+    page_icon="📈",
     layout="wide",
 )
 st.title("📉 Single-Ticker Parabolic Short Inspector")
@@ -561,7 +561,6 @@ if ticker_input or analyze_click:
         # ADVANCED SHORT METRICS & CHECKLIST SIDE-BY-SIDE
         st.subheader("🔍 Micro-Cap Short Fundamentals & Criteria Checklist")
 
-        # Layout: Live Data (Left Column) vs Criteria Checklist (Right Column)
         col_metrics, col_checklist = st.columns([1, 1])
 
         with col_metrics:
@@ -614,32 +613,41 @@ if ticker_input or analyze_click:
         with col_checklist:
             st.markdown("#### 📋 Short Candidate Target Criteria")
 
-            # Status evaluation against ideal targets
+            # Corrected inline conditionals
             z_match = (
                 "✅ Match"
-                if data["z_score"] is not None and data["z_score"] < 1.8
+                if (data["z_score"] is not None and data["z_score"] < 1.8)
                 else "❌ No"
             )
             f_match = (
                 "✅ Match"
-                if data["f_score"] is not None and data["f_score"] <= 2
+                if (data["f_score"] is not None and data["f_score"] <= 2)
                 else "❌ No"
             )
             runway_match = (
                 "✅ Match"
-                if data["cash_runway_months"] is not None
-                and data["cash_runway_months"] < 6.0
-            ) else "❌ No"
+                if (
+                    data["cash_runway_months"] is not None
+                    and data["cash_runway_months"] < 6.0
+                )
+                else "❌ No"
+            )
             ctb_match = (
                 "✅ Match"
-                if data["ctb_estimated"] is not None
-                and data["ctb_estimated"] < 20.0
-            ) else "⚠️ High Fees"
+                if (
+                    data["ctb_estimated"] is not None
+                    and data["ctb_estimated"] < 20.0
+                )
+                else "⚠️ High Fees"
+            )
             dilution_match = (
                 "✅ Match"
-                if data["share_growth_yoy"] is not None
-                and data["share_growth_yoy"] > 20.0
-            ) else "❌ No"
+                if (
+                    data["share_growth_yoy"] is not None
+                    and data["share_growth_yoy"] > 20.0
+                )
+                else "❌ No"
+            )
 
             chk_df = pd.DataFrame(
                 [
@@ -678,7 +686,7 @@ if ticker_input or analyze_click:
                 ]
             )
 
-            st.dataframe(chk_df, use_container_width=True, hide_index=True)
+            st.dataframe(chk_df, width="stretch", hide_index=True)
 
         st.divider()
 
