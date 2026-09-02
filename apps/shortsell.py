@@ -185,25 +185,23 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
 def fetch_intraday_history(symbol: str, period: str, interval: str) -> pd.DataFrame:
     """Fetch intraday bars with a wider-interval fallback for Yahoo throttling."""
     ticker = yf.Ticker(symbol)
-    try:
-        history = ticker.history(period=period, interval=interval, prepost=True)
-        if not history.empty:
-            return history
-    except Exception:
-        pass
 
+    requests = [(period, interval, True), (period, interval, False)]
     if interval == "1m":
+        requests.extend([(period, "5m", True), (period, "5m", False)])
+    requests.append(("1mo", "1d", False))
+
+    for request_period, request_interval, prepost in requests:
         try:
-            history = ticker.history(period=period, interval="5m", prepost=True)
+            history = ticker.history(
+                period=request_period,
+                interval=request_interval,
+                prepost=prepost,
+            )
             if not history.empty:
                 return history
         except Exception:
             pass
-
-    try:
-        return ticker.history(period="1mo", interval="1d", prepost=True)
-    except Exception:
-        pass
 
     return pd.DataFrame()
 
