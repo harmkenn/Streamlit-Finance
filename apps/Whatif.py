@@ -6,6 +6,33 @@ import plotly.graph_objects as go
 
 st.title("📈 Historical Investment Growth (DRIP Simulation)")
 
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_drip_history(tickers: tuple[str, ...], start: str, end: str) -> pd.DataFrame:
+    """Fetch batch history, falling back to isolated requests for partial responses."""
+    try:
+        history = Ticker(list(tickers)).history(start=start, end=end)
+        if isinstance(history, pd.DataFrame) and not history.empty:
+            history = history.reset_index()
+            required_columns = {"symbol", "date", "close", "dividends"}
+            if required_columns.issubset(history.columns) and set(tickers).issubset(
+                set(history["symbol"].dropna().unique())
+            ):
+                return history
+    except Exception:
+        pass
+
+    ticker_frames = []
+    for ticker in tickers:
+        try:
+            history = Ticker(ticker).history(start=start, end=end)
+            if isinstance(history, pd.DataFrame) and not history.empty:
+                ticker_frames.append(history.reset_index())
+        except Exception:
+            continue
+
+    return pd.concat(ticker_frames, ignore_index=True) if ticker_frames else pd.DataFrame()
+
+
 # --- Parse tickers from shared session state ---
 raw_tickers = st.session_state.get("user_tickers", "")
 ticker_list = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
@@ -54,10 +81,10 @@ fig = go.Figure()
 
 # --- Batch Fetch Data for Selected Tickers ---
 try:
-    ticker_batch = Ticker(tickers)
-    history = ticker_batch.history(
-        start=start_date.strftime('%Y-%m-%d'),
-        end=end_date.strftime('%Y-%m-%d')
+    history = fetch_drip_history(
+        tuple(tickers),
+        start_date.strftime("%Y-%m-%d"),
+        end_date.strftime("%Y-%m-%d"),
     )
 
     if isinstance(history, pd.DataFrame) and not history.empty and 'close' in history.columns:
