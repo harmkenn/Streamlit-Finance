@@ -25,12 +25,17 @@ def fetch_stock_data(symbol: str) -> dict:
     """Fetches intraday data with fallbacks for off-hours and extended sessions."""
     try:
         ticker = yf.Ticker(symbol)
-        info = ticker.info
-        
+
         # 1. Fetch up to 5 days of 1-minute bars with extended hours enabled
         hist_1d = ticker.history(period="5d", interval="1m", prepost=True)
         if hist_1d.empty:
             return None
+
+        # Fundamentals are optional; Yahoo can provide prices even when info fails.
+        try:
+            info = ticker.info or {}
+        except Exception:
+            info = {}
 
         # Filter to the most recent trading session
         latest_date = hist_1d.index.max().date()
@@ -43,8 +48,8 @@ def fetch_stock_data(symbol: str) -> dict:
         day_low = session_df['Low'].min()
         
         # Fallback for Previous Close
-        prev_close = info.get('previousClose', None)
-        if not prev_close or np.isnan(prev_close):
+        prev_close = pd.to_numeric(info.get('previousClose'), errors="coerce")
+        if pd.isna(prev_close) or prev_close <= 0:
             prev_close = session_df['Open'].iloc[0]
         
         # Today's Anchored Intraday VWAP
@@ -53,6 +58,8 @@ def fetch_stock_data(symbol: str) -> dict:
         
         # 2. 10-Day history (5m bars) with extended hours
         hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
+        if hist_10d.empty:
+            hist_10d = hist_1d
         
         # Ratios & Metrics
         gain_24h = (curr_price - prev_close) / prev_close if prev_close > 0 else 0

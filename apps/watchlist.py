@@ -216,12 +216,19 @@ df["Symbol_URL"] = df["Symbol"].apply(
 )
 
 overview_df = df[["Symbol_URL", "Price", "Change", "% Change"]].copy()
-overview_df["Shares Owned"] = 0.0
-overview_df["Avg Cost"] = 0.0
+positions = st.session_state.setdefault("watchlist_positions", {})
+symbols = df["Symbol"].tolist()
+overview_df["Shares Owned"] = [
+    positions.get(symbol, {}).get("shares_owned", 0.0) for symbol in symbols
+]
+overview_df["Avg Cost"] = [
+    positions.get(symbol, {}).get("avg_cost", 0.0) for symbol in symbols
+]
 overview_df["Profit"] = 0.0
 
 edited_overview = st.data_editor(
     overview_df,
+    key="watchlist_positions_editor",
     use_container_width=True,
     hide_index=True,
     disabled=["Symbol_URL", "Price", "Change", "% Change", "Profit"],
@@ -230,7 +237,6 @@ edited_overview = st.data_editor(
             label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
         ),
         "Shares Owned": st.column_config.NumberColumn(
-            min_value=0.0,
             step=0.01,
             format="%.2f",
         ),
@@ -245,6 +251,12 @@ edited_overview = st.data_editor(
         ),
     },
 )
+
+for symbol, (_, row) in zip(symbols, edited_overview.iterrows()):
+    positions[symbol] = {
+        "shares_owned": row["Shares Owned"],
+        "avg_cost": row["Avg Cost"],
+    }
 
 edited_overview["Profit"] = edited_overview.apply(
     lambda row: calculate_position_profit(row["Price"], row["Avg Cost"], row["Shares Owned"]),
