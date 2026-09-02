@@ -5,24 +5,24 @@ import plotly.graph_objects as go
 import streamlit as st
 from yahooquery import Ticker
 
-st.set_page_config(layout="wide")
-st.title("Stock OHLC Plot with Indicators, Moving Averages, and Dividends")
 
-
-# --- Helper to pull current session tickers ---
+# --- FORCE READ FROM SIDEBAR TEXTBOX ---
 def get_current_tickers() -> list[str]:
-    """Dynamically fetch the current tickers from session state or disk."""
-    raw_tickers = ""
-    if "user_tickers" in st.session_state:
-        raw_tickers = st.session_state["user_tickers"]
-    elif "tickers" in st.session_state:
-        raw_tickers = st.session_state["tickers"]
-    elif os.path.exists("tickers.txt"):
+    raw_tickers = st.session_state.get("user_tickers", "")
+
+    # Fallback checks if session state key is somehow empty
+    if not raw_tickers.strip():
+        raw_tickers = st.session_state.get("tickers", "")
+
+    if not raw_tickers.strip() and os.path.exists("tickers.txt"):
         with open("tickers.txt", "r") as f:
             raw_tickers = f.read().strip()
 
+    # Parse into a clean list of uppercase tickers
     return [
-        t.strip().upper() for t in raw_tickers.split(",") if t.strip()
+        t.strip().upper()
+        for t in raw_tickers.replace("\n", ",").split(",")
+        if t.strip()
     ]
 
 
@@ -30,10 +30,11 @@ def get_current_tickers() -> list[str]:
 col1, col2, col3 = st.columns(3)
 with col1:
     tickers_list = get_current_tickers()
+
     if tickers_list:
-        ticker = st.selectbox("Select Stock Ticker", tickers_list)
+        ticker = st.selectbox("Select Stock Ticker", options=tickers_list)
     else:
-        ticker = st.text_input("Enter ticker").upper()
+        ticker = st.text_input("Enter ticker", value="TQQQ").upper()
 
 with col2:
     start_date = st.date_input(
@@ -41,6 +42,8 @@ with col2:
     )
 with col3:
     end_date = st.date_input("End Date", datetime.today())
+
+# ... rest of your indicators, yahooquery fetch, and chart code ...
 
 
 # --- Indicator Functions ---
