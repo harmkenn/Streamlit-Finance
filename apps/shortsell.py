@@ -185,65 +185,29 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
 def fetch_stock_data(symbol: str) -> dict:
     try:
         ticker = yf.Ticker(symbol)
-<<<<<<< HEAD
 
-        # 1. Fetch up to 5 days of 1-minute bars with extended hours enabled
-=======
-        info = ticker.info or {}
-
->>>>>>> 93e7e584595dc03583f78411101b6f7d4ddf81e8
+        # Price history remains usable when Yahoo fundamentals are unavailable.
         hist_1d = ticker.history(period="5d", interval="1m", prepost=True)
         if hist_1d.empty:
             return None
 
-<<<<<<< HEAD
-        # Fundamentals are optional; Yahoo can provide prices even when info fails.
         try:
             info = ticker.info or {}
         except Exception:
             info = {}
 
-        # Filter to the most recent trading session
-=======
->>>>>>> 93e7e584595dc03583f78411101b6f7d4ddf81e8
         latest_date = hist_1d.index.max().date()
         session_df = hist_1d[hist_1d.index.date == latest_date]
         if session_df.empty:
             session_df = hist_1d
 
-<<<<<<< HEAD
-        curr_price = session_df['Close'].iloc[-1]
-        day_high = session_df['High'].max()
-        day_low = session_df['Low'].min()
-        
-        # Fallback for Previous Close
-        prev_close = pd.to_numeric(info.get('previousClose'), errors="coerce")
-        if pd.isna(prev_close) or prev_close <= 0:
-            prev_close = session_df['Open'].iloc[0]
-        
-        # Today's Anchored Intraday VWAP
-        tp = (session_df['High'] + session_df['Low'] + session_df['Close']) / 3
-        vwap = (tp * session_df['Volume']).sum() / session_df['Volume'].sum() if session_df['Volume'].sum() > 0 else curr_price
-        
-        # 2. 10-Day history (5m bars) with extended hours
-        hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
-        if hist_10d.empty:
-            hist_10d = hist_1d
-        
-        # Ratios & Metrics
-        gain_24h = (curr_price - prev_close) / prev_close if prev_close > 0 else 0
-        drop_from_high = (day_high - curr_price) / day_high if day_high > 0 else 0
-        
-        denom = (day_high - prev_close)
-=======
         curr_price = session_df["Close"].iloc[-1]
         day_high = session_df["High"].max()
         day_low = session_df["Low"].min()
 
-        prev_close = info.get("previousClose", None)
-        if not prev_close or np.isnan(prev_close):
-            prev_close = session_df["Open"].iloc[0]
-
+        prev_close = pd.to_numeric(info.get('previousClose'), errors="coerce")
+        if pd.isna(prev_close) or prev_close <= 0:
+            prev_close = session_df['Open'].iloc[0]
         tp = (session_df["High"] + session_df["Low"] + session_df["Close"]) / 3
         vwap = (
             (tp * session_df["Volume"]).sum() / session_df["Volume"].sum()
@@ -252,6 +216,8 @@ def fetch_stock_data(symbol: str) -> dict:
         )
 
         hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
+        if hist_10d.empty:
+            hist_10d = hist_1d
 
         gain_24h = (
             (curr_price - prev_close) / prev_close if prev_close > 0 else 0
@@ -261,7 +227,6 @@ def fetch_stock_data(symbol: str) -> dict:
         )
 
         denom = day_high - prev_close
->>>>>>> 93e7e584595dc03583f78411101b6f7d4ddf81e8
         rejection_pct = (day_high - curr_price) / denom if denom > 0 else 0
 
         tot_vol = session_df["Volume"].sum()

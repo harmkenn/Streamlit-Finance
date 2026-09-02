@@ -120,7 +120,7 @@ tickers_list = [
 st.sidebar.header("⚙️ Controls")
 st.sidebar.markdown(f"**Market Status:** `{get_market_status()}`")
 
-refresh_sec = st.sidebar.slider("Auto-Refresh Interval (s):", min_value=5, max_value=120, value=30)
+refresh_sec = st.sidebar.slider("Auto-Refresh Interval (s):", min_value=5, max_value=120, value=60)
 st_autorefresh(interval=refresh_sec * 1000, key="watchlist_session_refresh")
 
 if not tickers_list:
@@ -136,9 +136,23 @@ df["Symbol_URL"] = df["Symbol"].apply(
 )
 
 overview_df = df[["Symbol_URL", "Price", "Change", "% Change"]].copy()
+overview_df.insert(1, "Symbol", df["Symbol"])
 overview_df["Shares Owned"] = 0.0
 overview_df["Avg Cost"] = 0.0
 overview_df["Profit"] = 0.0
+
+portfolio_positions = st.session_state.setdefault("portfolio_positions", {})
+for symbol, position in portfolio_positions.items():
+    matching_rows = overview_df[overview_df["Symbol"] == symbol].index
+    if len(matching_rows) == 1:
+        row_index = matching_rows[0]
+        overview_df.loc[row_index, "Shares Owned"] = position.get("shares", 0.0)
+        overview_df.loc[row_index, "Avg Cost"] = position.get("cost", 0.0)
+
+overview_df["Profit"] = overview_df.apply(
+    lambda row: calculate_position_profit(row["Price"], row["Avg Cost"], row["Shares Owned"]),
+    axis=1,
+)
 
 edited_overview = st.data_editor(
     overview_df,
@@ -156,13 +170,12 @@ edited_overview = st.data_editor(
         "Change": st.column_config.NumberColumn(format="%+.2f"),
         "% Change": st.column_config.NumberColumn(format="%+.2f%%"),
         "Shares Owned": st.column_config.NumberColumn(
-            min_value=0.0,
             step=0.01,
             format="%.2f",
         ),
         "Avg Cost": st.column_config.NumberColumn(
             min_value=0.0,
-            step=0.5,
+            step=0.01,
             format="$%.2f",
         ),
         "Profit": st.column_config.NumberColumn(
@@ -178,15 +191,15 @@ edited_overview["Profit"] = edited_overview.apply(
 )
 
 # Save edited positions back to session state
-for idx, row in edited_df.iterrows():
+for _, row in edited_overview.iterrows():
     symbol = row["Symbol"]
-    st.session_state["portfolio_positions"][symbol] = {
+    portfolio_positions[symbol] = {
         "shares": float(row["Shares Owned"]),
         "cost": float(row["Avg Cost"])
     }
 
 # Summary KPIs
-total_profit = edited_df["Profit"].sum()
+total_profit = edited_overview["Profit"].sum()
 col1, col2 = st.columns(2)
 with col1:
     st.metric("Total Watchlist Portfolio Profit/Loss", f"${total_profit:,.2f}", delta=f"{total_profit:,.2f}")
