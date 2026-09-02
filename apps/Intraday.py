@@ -5,6 +5,16 @@ import pandas as pd
 
 st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours) v5.0")
 
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_history(ticker: str, period: str, interval: str, prepost: bool = False) -> pd.DataFrame:
+    """Cache Yahoo history so one rerun does not issue duplicate requests."""
+    return yf.Ticker(ticker).history(
+        period=period,
+        interval=interval,
+        prepost=prepost,
+    )
+
+
 # --- Parse tickers from shared session state ---
 raw_tickers = st.session_state.get("user_tickers", "")
 tickers_list = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
@@ -17,8 +27,10 @@ with col1:
 # --- Main Chart Area ---
 if ticker:
     try:
-        yf_ticker = yf.Ticker(ticker)
-        data = yf_ticker.history(period="10d", interval="5m", prepost=True)
+        if refresh_button:
+            fetch_history.clear()
+
+        data = fetch_history(ticker, "10d", "5m", prepost=True)
 
         if data.empty:
             st.error(f"No data found for {ticker}. Please check the symbol and try again.")
@@ -65,7 +77,7 @@ if ticker:
 
         # --- Stats Table ---
         with col3:
-            stats_data = yf_ticker.history(period="3mo", interval="1d")
+            stats_data = fetch_history(ticker, "3mo", "1d")
             
             if not stats_data.empty:
                 w1 = stats_data.tail(5)
@@ -103,9 +115,6 @@ if ticker:
 
         st.write(data[["Close", "Volume"]][::-1])
 
-        if refresh_button:
-            st.rerun()
-
     except Exception as e:
         st.error(f"Error fetching data: {e}")
 
@@ -115,10 +124,9 @@ st.sidebar.header("📊 Current Prices & 60-Day Range")
 if tickers_list:
     for t in tickers_list:
         try:
-            yf_t = yf.Ticker(t)
-            t_data = yf_t.history(period="1d", interval="1m", prepost=True)
-            month_data = yf_t.history(period="2mo", interval="1d")
-            intraday = yf_t.history(period="10d", interval="5m", prepost=True)
+            t_data = fetch_history(t, "1d", "1m", prepost=True)
+            month_data = fetch_history(t, "2mo", "1d")
+            intraday = fetch_history(t, "10d", "5m", prepost=True)
 
             if not intraday.empty:
                 intraday = intraday.tz_convert("America/New_York")
