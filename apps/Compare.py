@@ -6,6 +6,25 @@ import plotly.graph_objects as go
 
 st.title("📈 Normalized Closing Prices")
 
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_comparison_history(tickers: tuple[str, ...], start: str, end: str) -> pd.DataFrame:
+    """Fetch and normalize yahooquery's multi-ticker response shape."""
+    history = Ticker(list(tickers)).history(start=start, end=end)
+    if not isinstance(history, pd.DataFrame) or history.empty:
+        return pd.DataFrame()
+
+    history = history.reset_index()
+    if "symbol" not in history.columns or "date" not in history.columns:
+        return pd.DataFrame()
+
+    return history.pivot_table(
+        index="date",
+        columns="symbol",
+        values="close",
+        aggfunc="last",
+    ).sort_index()
+
+
 # --- Parse tickers from shared session state ---
 raw_tickers = st.session_state.get("user_tickers", "")
 ticker_list = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
@@ -48,18 +67,13 @@ else:  # YTD
 
 # --- Fetch Data ---
 try:
-    ticker_data = Ticker(tickers)
-    history = ticker_data.history(
-        start=start_date.strftime('%Y-%m-%d'),
-        end=end_date.strftime('%Y-%m-%d')
+    close_prices = fetch_comparison_history(
+        tuple(tickers),
+        start_date.strftime("%Y-%m-%d"),
+        end_date.strftime("%Y-%m-%d"),
     )
 
-    if isinstance(history, pd.DataFrame) and not history.empty and 'close' in history.columns:
-        history = history.reset_index()
-        
-        # Pivot DataFrame to get closing prices for each ticker in columns
-        close_prices = history.pivot(index='date', columns='symbol', values='close')
-
+    if not close_prices.empty:
         # Clean missing values safely (forward-fill missing dates rather than dropping entire rows)
         close_prices = close_prices.ffill().bfill()
 
