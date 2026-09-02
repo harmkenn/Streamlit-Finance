@@ -194,9 +194,16 @@ def fetch_intraday_history(symbol: str, period: str, interval: str) -> pd.DataFr
 
     if interval == "1m":
         try:
-            return ticker.history(period=period, interval="5m", prepost=True)
+            history = ticker.history(period=period, interval="5m", prepost=True)
+            if not history.empty:
+                return history
         except Exception:
             pass
+
+    try:
+        return ticker.history(period="1mo", interval="1d", prepost=True)
+    except Exception:
+        pass
 
     return pd.DataFrame()
 
@@ -250,11 +257,19 @@ def fetch_stock_data(symbol: str) -> dict:
         rejection_pct = (day_high - curr_price) / denom if denom > 0 else 0
 
         tot_vol = session_df["Volume"].sum()
-        avg_vol = info.get("averageVolume10days", tot_vol)
+        avg_vol = pd.to_numeric(info.get("averageVolume10days", tot_vol), errors="coerce")
+        if pd.isna(avg_vol) or avg_vol <= 0:
+            avg_vol = tot_vol
         rvol = tot_vol / (avg_vol / 6.5) if avg_vol > 0 else 1.0
 
-        float_shares = info.get("floatShares", 0) or 0
-        short_percent_of_float = info.get("shortPercentOfFloat", 0) or 0
+        float_shares = pd.to_numeric(info.get("floatShares", 0), errors="coerce")
+        float_shares = 0 if pd.isna(float_shares) else float_shares
+        short_percent_of_float = pd.to_numeric(
+            info.get("shortPercentOfFloat", 0), errors="coerce"
+        )
+        short_percent_of_float = (
+            0 if pd.isna(short_percent_of_float) else short_percent_of_float
+        )
 
         extra_metrics = compute_short_metrics(ticker, info)
 
