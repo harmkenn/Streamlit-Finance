@@ -182,12 +182,32 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
 
 # --- CACHED DATA ENGINE TO PREVENT RATE LIMITING ---
 @st.cache_data(ttl=120, show_spinner=False)
+def fetch_intraday_history(symbol: str, period: str, interval: str) -> pd.DataFrame:
+    """Fetch intraday bars with a wider-interval fallback for Yahoo throttling."""
+    ticker = yf.Ticker(symbol)
+    try:
+        history = ticker.history(period=period, interval=interval, prepost=True)
+        if not history.empty:
+            return history
+    except Exception:
+        pass
+
+    if interval == "1m":
+        try:
+            return ticker.history(period=period, interval="5m", prepost=True)
+        except Exception:
+            pass
+
+    return pd.DataFrame()
+
+
+@st.cache_data(ttl=120, show_spinner=False)
 def fetch_stock_data(symbol: str) -> dict:
     try:
         ticker = yf.Ticker(symbol)
 
         # Price history remains usable when Yahoo fundamentals are unavailable.
-        hist_1d = ticker.history(period="5d", interval="1m", prepost=True)
+        hist_1d = fetch_intraday_history(symbol, "5d", "1m")
         if hist_1d.empty:
             return None
 
@@ -215,7 +235,7 @@ def fetch_stock_data(symbol: str) -> dict:
             else curr_price
         )
 
-        hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
+        hist_10d = fetch_intraday_history(symbol, "10d", "5m")
         if hist_10d.empty:
             hist_10d = hist_1d
 
