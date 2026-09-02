@@ -5,10 +5,6 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 import yfinance as yf
 
-# Page Configuration
-st.set_page_config(page_title="Watchlist", page_icon="📈", layout="wide")
-
-
 # --- Market Status Helper ---
 def get_market_status():
     eastern_tz = pytz.timezone("US/Eastern")
@@ -51,34 +47,34 @@ def fetch_watchlist_data(tickers: list[str]) -> pd.DataFrame:
                     prev_close = hist["Close"].iloc[-2] if len(hist) > 1 else price
                     volume = hist["Volume"].iloc[-1]
 
-            change = price - prev_close if price and prev_close else 0.0
+            change = (price - prev_close) if price and prev_close else 0.0
             percent_change = (change / prev_close * 100) if prev_close else 0.0
 
             # Historical Changes for Performance
             hist_1m = t.history(period="1mo")
             chg_1m = (
                 ((price - hist_1m["Close"].iloc[0]) / hist_1m["Close"].iloc[0] * 100)
-                if not hist_1m.empty
+                if not hist_1m.empty and hist_1m["Close"].iloc[0] != 0
                 else 0.0
             )
 
             hist_ytd = t.history(period="ytd")
             chg_ytd = (
                 ((price - hist_ytd["Close"].iloc[0]) / hist_ytd["Close"].iloc[0] * 100)
-                if not hist_ytd.empty
+                if not hist_ytd.empty and hist_ytd["Close"].iloc[0] != 0
                 else 0.0
             )
 
             rows.append(
                 {
                     "Symbol": ticker,
-                    "Price": price,
-                    "Change": change,
-                    "% Change": percent_change,
+                    "Price": float(price) if price else None,
+                    "Change": float(change),
+                    "% Change": float(percent_change),
                     "Volume": volume,
                     "Market Cap": mcap,
-                    "1M %": chg_1m,
-                    "YTD %": chg_ytd,
+                    "1M %": float(chg_1m),
+                    "YTD %": float(chg_ytd),
                     "52W High": info.get("year_high"),
                     "52W Low": info.get("year_low"),
                 }
@@ -102,113 +98,37 @@ def fetch_watchlist_data(tickers: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# --- Formatting Helpers ---
-def _to_float(val):
-    if pd.isna(val) or val is None:
-        return None
-    try:
-        return float(val)
-    except (TypeError, ValueError):
-        return None
-
-
-def format_mcap(val):
-    numeric_val = _to_float(val)
-    if numeric_val is None:
-        return "N/A"
-    if numeric_val >= 1e12:
-        return f"${numeric_val / 1e12:.2f}T"
-    if numeric_val >= 1e9:
-        return f"${numeric_val / 1e9:.2f}B"
-    if numeric_val >= 1e6:
-        return f"${numeric_val / 1e6:.2f}M"
-    return f"${numeric_val:,.0f}"
-
-
-def format_volume(val):
-    numeric_val = _to_float(val)
-    if numeric_val is None:
-        return "N/A"
-    if numeric_val >= 1e6:
-        return f"{numeric_val / 1e6:.2f}M"
-    if numeric_val >= 1e3:
-        return f"{numeric_val / 1e3:.1f}K"
-    return f"{numeric_val:,.0f}"
-
-
+# --- Calculation Helper ---
 def calculate_position_profit(price, avg_cost, shares_owned):
-    price_val = _to_float(price)
-    avg_cost_val = _to_float(avg_cost)
-    shares_val = _to_float(shares_owned)
-    if price_val is None or avg_cost_val is None or shares_val is None:
+    if pd.isna(price) or pd.isna(avg_cost) or pd.isna(shares_owned):
         return 0.0
-    return (price_val - avg_cost_val) * shares_val
-
-
-def format_money(val):
-    numeric_val = _to_float(val)
-    if numeric_val is None:
-        return "N/A"
-    return f"${numeric_val:,.2f}"
-
-
-def format_signed_number(val):
-    numeric_val = _to_float(val)
-    if numeric_val is None:
-        return "N/A"
-    return f"{numeric_val:+.2f}"
-
-
-def format_signed_percent(val):
-    numeric_val = _to_float(val)
-    if numeric_val is None:
-        return "N/A"
-    return f"{numeric_val:+.2f}%"
-
-
-def color_changes(val):
-    if pd.isna(val) or val is None:
-        return ""
-    if val > 0:
-        return "color: #00c853; font-weight: bold;"
-    elif val < 0:
-        return "color: #ff5252; font-weight: bold;"
-    return ""
+    return (float(price) - float(avg_cost)) * float(shares_owned)
 
 
 # --- Main Watchlist Application ---
 st.title("📈 Watchlist")
 
-# Extract tickers list from st.session_state
+# Extract tickers list from st.session_state (using shared "user_tickers" key)
+raw_tickers = st.session_state.get("user_tickers", "")
 tickers_list = [
     t.strip().upper()
-    for t in st.session_state.get("tickers", "").split(",")
+    for t in raw_tickers.split(",")
     if t.strip()
 ]
 
-# Sidebar Configuration
+# Sidebar Controls
 st.sidebar.header("⚙️ Controls")
 st.sidebar.markdown(f"**Market Status:** `{get_market_status()}`")
-
-# Allow single ticker focus or full-list view
-selected_ticker = (
-    st.sidebar.selectbox("Select Stock Ticker:", tickers_list)
-    if tickers_list
-    else st.sidebar.text_input("Enter ticker:").upper()
-)
 
 refresh_sec = st.sidebar.slider("Auto-Refresh Interval (s):", min_value=5, max_value=120, value=30)
 st_autorefresh(interval=refresh_sec * 1000, key="watchlist_session_refresh")
 
-if not tickers_list and not selected_ticker:
-    st.info("No tickers found in session state. Please input a comma-separated list into `st.session_state['tickers']`.")
+if not tickers_list:
+    st.info("⚠️ No tickers found in session state. Please input a comma-separated list into the sidebar text area.")
     st.stop()
 
-# Determine final list of tickers to display in the grid
-active_tickers = tickers_list if tickers_list else [selected_ticker]
-
 # Fetch market metrics
-df = fetch_watchlist_data(active_tickers)
+df = fetch_watchlist_data(tickers_list)
 
 # Stock Analysis Link Generation
 df["Symbol_URL"] = df["Symbol"].apply(
@@ -216,14 +136,8 @@ df["Symbol_URL"] = df["Symbol"].apply(
 )
 
 overview_df = df[["Symbol_URL", "Price", "Change", "% Change"]].copy()
-positions = st.session_state.setdefault("watchlist_positions", {})
-symbols = df["Symbol"].tolist()
-overview_df["Shares Owned"] = [
-    positions.get(symbol, {}).get("shares_owned", 0.0) for symbol in symbols
-]
-overview_df["Avg Cost"] = [
-    positions.get(symbol, {}).get("avg_cost", 0.0) for symbol in symbols
-]
+overview_df["Shares Owned"] = 0.0
+overview_df["Avg Cost"] = 0.0
 overview_df["Profit"] = 0.0
 
 edited_overview = st.data_editor(
@@ -231,55 +145,50 @@ edited_overview = st.data_editor(
     key="watchlist_positions_editor",
     use_container_width=True,
     hide_index=True,
-    disabled=["Symbol_URL", "Price", "Change", "% Change", "Profit"],
+    disabled=["Symbol_URL", "Symbol", "Price", "Change", "% Change", "Profit", "1M %", "YTD %"],
     column_config={
         "Symbol_URL": st.column_config.LinkColumn(
-            label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
+            label="Symbol Link",
+            display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
         ),
+        "Symbol": st.column_config.TextColumn(label="Ticker"),
+        "Price": st.column_config.NumberColumn(format="$%.2f"),
+        "Change": st.column_config.NumberColumn(format="%+.2f"),
+        "% Change": st.column_config.NumberColumn(format="%+.2f%%"),
         "Shares Owned": st.column_config.NumberColumn(
+            min_value=0.0,
             step=0.01,
             format="%.2f",
         ),
         "Avg Cost": st.column_config.NumberColumn(
             min_value=0.0,
-            step=0.01,
+            step=0.5,
             format="$%.2f",
         ),
         "Profit": st.column_config.NumberColumn(
-            label="Profit",
-            format="" + "$%.2f",
+            label="Unrealized Profit",
+            format="$%.2f",
         ),
     },
 )
-
-for symbol, (_, row) in zip(symbols, edited_overview.iterrows()):
-    positions[symbol] = {
-        "shares_owned": row["Shares Owned"],
-        "avg_cost": row["Avg Cost"],
-    }
 
 edited_overview["Profit"] = edited_overview.apply(
     lambda row: calculate_position_profit(row["Price"], row["Avg Cost"], row["Shares Owned"]),
     axis=1,
 )
 
-styled_overview = edited_overview.style.map(color_changes, subset=["Change", "% Change", "Profit"]).format(
-    {
-        "Price": format_money,
-        "Change": format_signed_number,
-        "% Change": format_signed_percent,
-        "Avg Cost": format_money,
-        "Profit": format_money,
+# Save edited positions back to session state
+for idx, row in edited_df.iterrows():
+    symbol = row["Symbol"]
+    st.session_state["portfolio_positions"][symbol] = {
+        "shares": float(row["Shares Owned"]),
+        "cost": float(row["Avg Cost"])
     }
-)
 
-st.dataframe(
-    styled_overview,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Symbol_URL": st.column_config.LinkColumn(
-            label="Symbol", display_text=r"https://stockanalysis\.com/stocks/(.*?)/"
-        )
-    },
-)
+# Summary KPIs
+total_profit = edited_df["Profit"].sum()
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("Total Watchlist Portfolio Profit/Loss", f"${total_profit:,.2f}", delta=f"{total_profit:,.2f}")
+with col2:
+    st.metric("Monitored Tickers", len(tickers_list))

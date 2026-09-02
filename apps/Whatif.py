@@ -4,77 +4,162 @@ import pandas as pd
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
-st.title("📈 $100,000 Investment Growth with Reinvested Dividends")
+st.title("📈 Historical Investment Growth (DRIP Simulation)")
 
-# Parameters
-ticker_list = [t.strip().upper() for t in st.session_state.get("tickers", "").split(",") if t.strip()]
-#ticker_list = ["MSTY", "MAIN"]
-tickers = st.multiselect("Select Tickers to Compare",options=ticker_list,default=ticker_list[:5])
-initial_investment = 100000
+# --- Parse tickers from shared session state ---
+raw_tickers = st.session_state.get("user_tickers", "")
+ticker_list = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
 
-# Date range
+if not ticker_list:
+    st.warning("⚠️ No tickers found in the sidebar. Please enter comma-separated stock tickers in the sidebar.")
+    st.stop()
+
+# --- Controls Layout ---
+col1, col2, col3 = st.columns([2, 1, 1])
+
+with col1:
+    tickers = st.multiselect(
+        "Select Tickers to Compare",
+        options=ticker_list,
+        default=ticker_list[:min(5, len(ticker_list))]
+    )
+
+with col2:
+    initial_investment = st.number_input(
+        "Initial Investment ($)",
+        min_value=1000,
+        max_value=10000000,
+        value=100000,
+        step=5000
+    )
+
+with col3:
+    time_horizon = st.selectbox(
+        "Time Horizon",
+        options=["1 Year", "2 Years", "3 Years", "5 Years"],
+        index=0
+    )
+
+if not tickers:
+    st.info("Select at least one ticker above to simulate growth.")
+    st.stop()
+
+# Determine start date
 end_date = datetime.today()
-start_date = end_date - timedelta(days=365)
+years_map = {"1 Year": 1, "2 Years": 2, "3 Years": 3, "5 Years": 5}
+years = years_map.get(time_horizon, 1)
+start_date = end_date - timedelta(days=365 * years)
 
 fig = go.Figure()
 
-for ticker_symbol in ticker_list:
-    ticker = Ticker(ticker_symbol)
-    history = ticker.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
+# --- Batch Fetch Data for Selected Tickers ---
+try:
+    ticker_batch = Ticker(tickers)
+    history = ticker_batch.history(
+        start=start_date.strftime('%Y-%m-%d'),
+        end=end_date.strftime('%Y-%m-%d')
+    )
 
-    if isinstance(history, pd.DataFrame) and not history.empty:
+    if isinstance(history, pd.DataFrame) and not history.empty and 'close' in history.columns:
         history = history.reset_index()
-        df = history[history['symbol'] == ticker_symbol][['date', 'close', 'dividends']]
-        df = df.sort_values('date').reset_index(drop=True)
-        df['dividends'] = df['dividends'].fillna(0)
 
-        # Initialize shares and investment value
-        shares = initial_investment / df.loc[0, 'close']
-        df['shares'] = 0.0
-        df['investment_value'] = 0.0
-        df.loc[0, 'shares'] = shares
-        df.loc[0, 'investment_value'] = shares * df.loc[0, 'close']
+        summary_data = []
 
-        for i in range(1, len(df)):
-            shares += df.loc[i, 'dividends'] * shares / df.loc[i, 'close']
-            df.loc[i, 'shares'] = shares
-            df.loc[i, 'investment_value'] = shares * df.loc[i, 'close']
+        for ticker_symbol in tickers:
+            df = history[history['symbol'] == ticker_symbol].copy()
 
-        # Calculate percent change
-        pct_change = (df['investment_value'].iloc[-1] / df['investment_value'].iloc[0] - 1) * 100
+            if df.empty or len(df) < 2:
+                st.warning(f"Insufficient historical data for {ticker_symbol}.")
+                continue
 
-        # Line plot for investment value
-        fig.add_trace(go.Scatter(
-            x=df['date'],
-            y=df['investment_value'],
-            mode='lines',
-            name=f"{ticker_symbol} ({pct_change:.1f}%)",
-            hovertemplate=(
-                f"<b>{ticker_symbol}</b><br>"
-                "Date: %{x}<br>"
-                "Value: $%{y:,.2f}<br>"
-                f"Total Return: {pct_change:.1f}%<extra></extra>"
-            )
-        ))
+            df = df[['date', 'close', 'dividends']].sort_values('date').reset_index(drop=True)
+            df['dividends'] = df['dividends'].fillna(0)
 
-        # Add stars for dividends
-        dividend_days = df[df['dividends'] > 0]
-        fig.add_trace(go.Scatter(
-            x=dividend_days['date'],
-            y=dividend_days['investment_value'],
-            mode='markers',
-            name=f"{ticker_symbol} Dividends",
-            marker=dict(size=10, symbol='star'),
-            hovertemplate="Dividend: $%{text:.2f}<br>Value: $%{y:,.2f}<extra></extra>",
-            text=dividend_days['dividends']
-        ))
+            # --- DRIP Calculation ---
+            initial_close = df.loc[0, 'close']
+            if initial_close == 0 or pd.isna(initial_close):
+                continue
 
-fig.update_layout(
-    title="📊 $100,000 Investment Growth with Reinvested Dividends (1 Year)",
-    xaxis_title="Date",
-    yaxis_title="Portfolio Value (USD)",
-    template="plotly_white",
-    height=600
-)
+            current_shares = initial_investment / initial_close
+            investment_values = []
+            share_counts = []
 
-st.plotly_chart(fig, width='stretch')
+            for idx, row in df.iterrows():
+                close_price = row['close']
+                dividend = row['dividends']
+
+                if dividend > 0 and close_price > 0:
+                    # Reinvest dividend payout into additional shares
+                    new_shares = (dividend * current_shares) / close_price
+                    current_shares += new_shares
+
+                share_counts.append(current_shares)
+                investment_values.append(current_shares * close_price)
+
+            df['shares'] = share_counts
+            df['investment_value'] = investment_values
+
+            final_val = df['investment_value'].iloc[-1]
+            pct_change = ((final_val / initial_investment) - 1) * 100
+
+            summary_data.append({
+                "Ticker": ticker_symbol,
+                "Initial Value": f"${initial_investment:,.2f}",
+                "Final Value": f"${final_val:,.2f}",
+                "Total Return": f"{pct_change:+.2f}%",
+                "Final Shares": f"{df['shares'].iloc[-1]:,.2f}"
+            })
+
+            # Line plot for portfolio growth
+            fig.add_trace(go.Scatter(
+                x=df['date'],
+                y=df['investment_value'],
+                mode='lines',
+                name=f"{ticker_symbol} ({pct_change:+.1f}%)",
+                hovertemplate=(
+                    f"<b>{ticker_symbol}</b><br>"
+                    "Date: %{x}<br>"
+                    "Value: $%{y:,.2f}<br>"
+                    f"Total Return: {pct_change:+.1f}%<extra></extra>"
+                )
+            ))
+
+            # Dividend markers
+            dividend_days = df[df['dividends'] > 0]
+            if not dividend_days.empty:
+                fig.add_trace(go.Scatter(
+                    x=dividend_days['date'],
+                    y=dividend_days['investment_value'],
+                    mode='markers',
+                    name=f"{ticker_symbol} Dividend",
+                    marker=dict(size=8, symbol='star'),
+                    hovertemplate=(
+                        f"<b>{ticker_symbol} Dividend Paid</b><br>"
+                        "Date: %{x}<br>"
+                        "Payout/Share: $%{text:.2f}<br>"
+                        "Portfolio Value: $%{y:,.2f}<extra></extra>"
+                    ),
+                    text=dividend_days['dividends']
+                ))
+
+        fig.update_layout(
+            title=f"📊 DRIP Performance ({time_horizon}) — Starting Capital: ${initial_investment:,.2f}",
+            xaxis_title="Date",
+            yaxis_title="Portfolio Value (USD)",
+            template="plotly_white",
+            height=600,
+            hovermode="x unified"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Display Summary Breakdown Table
+        if summary_data:
+            st.subheader("📋 Performance Summary Table")
+            st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+
+    else:
+        st.error(f"⚠️ Could not retrieve historical dividend data for selected tickers: {', '.join(tickers)}")
+
+except Exception as e:
+    st.error(f"Error fetching dividend or price history: {e}")
