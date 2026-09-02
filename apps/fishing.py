@@ -80,7 +80,7 @@ refresh_count = st_autorefresh(
 
 st.sidebar.write(f"**Total Refreshes:** {refresh_count}")
 
-if st.sidebar.button("Force Manual Refresh", use_container_width=True):
+if st.sidebar.button("Force Manual Refresh", width="stretch"):
     st.rerun()
 
 # Data Scraping Function
@@ -185,7 +185,7 @@ if df is not None:
     # Render table with LinkColumn configuration
     st.dataframe(
         styled_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Symbol_URL": st.column_config.LinkColumn(

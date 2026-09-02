@@ -104,11 +104,11 @@ try:
             hovermode="x unified"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # --- Table View ---
         st.subheader("📄 Normalized Prices Table")
-        st.dataframe(normalized.reset_index(), use_container_width=True)
+        st.dataframe(normalized.reset_index(), width="stretch")
 
     else:
         st.error(f"⚠️ Could not retrieve historical data for: {', '.join(tickers)}. Please verify the tickers.")

@@ -157,7 +157,7 @@ overview_df["Profit"] = overview_df.apply(
 edited_overview = st.data_editor(
     overview_df,
     key="watchlist_positions_editor",
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
     disabled=["Symbol_URL", "Symbol", "Price", "Change", "% Change", "Profit", "1M %", "YTD %"],
     column_config={

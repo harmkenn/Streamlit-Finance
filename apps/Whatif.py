@@ -178,12 +178,12 @@ try:
             hovermode="x unified"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # Display Summary Breakdown Table
         if summary_data:
             st.subheader("📋 Performance Summary Table")
-            st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(summary_data), width="stretch", hide_index=True)
 
     else:
         st.error(f"⚠️ Could not retrieve historical dividend data for selected tickers: {', '.join(tickers)}")
