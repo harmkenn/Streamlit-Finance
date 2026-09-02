@@ -5,7 +5,7 @@ import pandas as pd
 
 st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours) v5.0")
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_history(ticker: str, period: str, interval: str, prepost: bool = False) -> pd.DataFrame:
     """Cache Yahoo history so one rerun does not issue duplicate requests."""
     return yf.Ticker(ticker).history(
@@ -34,8 +34,12 @@ if ticker:
 
         if data.empty:
             st.error(f"No data found for {ticker}. Please check the symbol and try again.")
-        else:
+            data = None
+        elif data.index.tz is not None:
             data = data.tz_convert("America/New_York")
+
+        if data is None:
+            st.stop()
 
         with col2:
             latest_price = data["Close"].iloc[-1]
@@ -124,20 +128,10 @@ st.sidebar.header("📊 Current Prices & 60-Day Range")
 if tickers_list:
     for t in tickers_list:
         try:
-            t_data = fetch_history(t, "1d", "1m", prepost=True)
             month_data = fetch_history(t, "2mo", "1d")
-            intraday = fetch_history(t, "10d", "5m", prepost=True)
-
-            if not intraday.empty:
-                intraday = intraday.tz_convert("America/New_York")
-                regular = intraday.between_time("09:30", "16:00")
-                daily_from_intraday = regular.groupby(regular.index.date).last()
-                prev_close = daily_from_intraday["Close"].iloc[-2] if len(daily_from_intraday) >= 2 else None
-            else:
-                prev_close = None
-
-            if not t_data.empty and prev_close is not None and not month_data.empty:
-                latest = t_data["Close"].iloc[-1]
+            if len(month_data) >= 2:
+                latest = month_data["Close"].iloc[-1]
+                prev_close = month_data["Close"].iloc[-2]
                 price_diff = latest - prev_close
                 percent_diff = (price_diff / prev_close) * 100 if prev_close != 0 else 0
                 color = "green" if percent_diff >= 0 else "red"
