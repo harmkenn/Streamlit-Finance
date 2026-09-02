@@ -14,7 +14,12 @@ st.markdown(
 
 # --- READ SHARED SESSION STATE TICKERS ---
 raw_tickers = st.session_state.get("user_tickers", "")
-configured_tickers = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
+if not raw_tickers.strip():
+    raw_tickers = st.session_state.get("tickers", "")
+
+configured_tickers = [
+    t.strip().upper() for t in raw_tickers.replace("\n", ",").split(",") if t.strip()
+]
 
 if not configured_tickers:
     configured_tickers = ["TQQQ", "UPRO", "UDOW", "^VIX", "SPHY"]
@@ -34,18 +39,26 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
 
     try:
         # Financial Statements Extraction
-        bs = ticker_obj.quarterly_balance_sheet
-        inc = ticker_obj.quarterly_financials
-        cf = ticker_obj.quarterly_cashflow
+        bs = getattr(ticker_obj, "quarterly_balance_sheet", None)
+        inc = getattr(ticker_obj, "quarterly_financials", None)
+        cf = getattr(ticker_obj, "quarterly_cashflow", None)
 
         if bs is None or bs.empty or inc is None or inc.empty:
-            bs = ticker_obj.balance_sheet
-            inc = ticker_obj.financials
-            cf = ticker_obj.cashflow
+            bs = getattr(ticker_obj, "balance_sheet", None)
+            inc = getattr(ticker_obj, "financials", None)
+            cf = getattr(ticker_obj, "cashflow", None)
 
-        if bs is not None and not bs.empty and inc is not None and not inc.empty and len(bs.columns) >= 1:
+        if (
+            bs is not None
+            and not bs.empty
+            and inc is not None
+            and not inc.empty
+            and len(bs.columns) >= 1
+        ):
             tot_assets = bs.iloc[:, 0].get("Total Assets", np.nan)
-            tot_liab = bs.iloc[:, 0].get("Total Liabilities Net Minority Interest", np.nan)
+            tot_liab = bs.iloc[:, 0].get(
+                "Total Liabilities Net Minority Interest", np.nan
+            )
             curr_assets = bs.iloc[:, 0].get("Current Assets", np.nan)
             curr_liab = bs.iloc[:, 0].get("Current Liabilities", np.nan)
             cash = bs.iloc[:, 0].get("Cash And Cash Equivalents", np.nan)
@@ -57,14 +70,19 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
             mcap = info.get("marketCap", np.nan)
 
             # --- ALTMAN Z-SCORE ---
-            if all(pd.notna(x) and x > 0 for x in [tot_assets, tot_liab, curr_assets, curr_liab, rev]):
+            if all(
+                pd.notna(x) and x > 0
+                for x in [tot_assets, tot_liab, curr_assets, curr_liab, rev]
+            ):
                 x1 = (curr_assets - curr_liab) / tot_assets
                 x2 = (re if pd.notna(re) else 0.0) / tot_assets
                 x3 = (ebit if pd.notna(ebit) else 0.0) / tot_assets
                 x4 = (mcap if pd.notna(mcap) else 0.0) / tot_liab
                 x5 = rev / tot_assets
 
-                metrics["z_score"] = 1.2 * x1 + 1.4 * x2 + 3.3 * x3 + 0.6 * x4 + 0.999 * x5
+                metrics["z_score"] = (
+                    1.2 * x1 + 1.4 * x2 + 3.3 * x3 + 0.6 * x4 + 0.999 * x5
+                )
 
             # --- CASH BURN & RUNWAY (MONTHS) ---
             if cf is not None and not cf.empty and pd.notna(cash):
@@ -87,7 +105,11 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
             # --- PIOTROSKI F-SCORE ---
             if len(bs.columns) >= 2 and len(inc.columns) >= 2:
                 f_score = 0
-                roa_curr = (net_income / tot_assets) if pd.notna(net_income) and pd.notna(tot_assets) else 0
+                roa_curr = (
+                    (net_income / tot_assets)
+                    if pd.notna(net_income) and pd.notna(tot_assets)
+                    else 0
+                )
                 if roa_curr > 0:
                     f_score += 1
 
@@ -95,7 +117,11 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
                     ocf_curr = cf.iloc[:, 0].get("Operating Cash Flow", np.nan)
                     if pd.notna(ocf_curr) and ocf_curr > 0:
                         f_score += 1
-                    if pd.notna(ocf_curr) and pd.notna(net_income) and ocf_curr > net_income:
+                    if (
+                        pd.notna(ocf_curr)
+                        and pd.notna(net_income)
+                        and ocf_curr > net_income
+                    ):
                         f_score += 1
 
                 tot_assets_prev = bs.iloc[:, 1].get("Total Assets", np.nan)
@@ -110,7 +136,11 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
                 if (ltd_curr / tot_assets) < (ltd_prev / tot_assets_prev):
                     f_score += 1
 
-                cr_curr = (curr_assets / curr_liab) if pd.notna(curr_assets) and pd.notna(curr_liab) else 0
+                cr_curr = (
+                    (curr_assets / curr_liab)
+                    if pd.notna(curr_assets) and pd.notna(curr_liab)
+                    else 0
+                )
                 curr_assets_p = bs.iloc[:, 1].get("Current Assets", np.nan)
                 curr_liab_p = bs.iloc[:, 1].get("Current Liabilities", np.nan)
                 if pd.notna(curr_assets_p) and pd.notna(curr_liab_p):
@@ -122,9 +152,15 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
 
         # --- SHARES DILUTION ---
         shares_curr = info.get("sharesOutstanding", None)
-        shares_prev = bs.iloc[:, -1].get("Share Issued", None) if bs is not None and not bs.empty else None
+        shares_prev = (
+            bs.iloc[:, -1].get("Share Issued", None)
+            if bs is not None and not bs.empty
+            else None
+        )
         if shares_curr and shares_prev and shares_prev > 0:
-            metrics["share_growth_yoy"] = ((shares_curr - shares_prev) / shares_prev) * 100.0
+            metrics["share_growth_yoy"] = (
+                (shares_curr - shares_prev) / shares_prev
+            ) * 100.0
 
         # --- CTB ESTIMATION ---
         float_shares = info.get("floatShares", 0) or 0
@@ -144,7 +180,8 @@ def compute_short_metrics(ticker_obj, info: dict) -> dict:
     return metrics
 
 
-# --- FREE DATA ENGINE WITH OFF-HOURS FALLBACK ---
+# --- CACHED DATA ENGINE TO PREVENT RATE LIMITING ---
+@st.cache_data(ttl=120, show_spinner=False)
 def fetch_stock_data(symbol: str) -> dict:
     try:
         ticker = yf.Ticker(symbol)
@@ -168,12 +205,20 @@ def fetch_stock_data(symbol: str) -> dict:
             prev_close = session_df["Open"].iloc[0]
 
         tp = (session_df["High"] + session_df["Low"] + session_df["Close"]) / 3
-        vwap = (tp * session_df["Volume"]).sum() / session_df["Volume"].sum() if session_df["Volume"].sum() > 0 else curr_price
+        vwap = (
+            (tp * session_df["Volume"]).sum() / session_df["Volume"].sum()
+            if session_df["Volume"].sum() > 0
+            else curr_price
+        )
 
         hist_10d = ticker.history(period="10d", interval="5m", prepost=True)
 
-        gain_24h = (curr_price - prev_close) / prev_close if prev_close > 0 else 0
-        drop_from_high = (day_high - curr_price) / day_high if day_high > 0 else 0
+        gain_24h = (
+            (curr_price - prev_close) / prev_close if prev_close > 0 else 0
+        )
+        drop_from_high = (
+            (day_high - curr_price) / day_high if day_high > 0 else 0
+        )
 
         denom = day_high - prev_close
         rejection_pct = (day_high - curr_price) / denom if denom > 0 else 0
@@ -259,7 +304,9 @@ def calculate_short_score(data: dict) -> dict:
         boosters.append(("+10 pts", "Moderate Surge (50%-99% gain)"))
     else:
         score -= 20
-        penalties.append(("-20 pts", "Weak Gain (<50% gain) — Lacks parabolic extension"))
+        penalties.append(
+            ("-20 pts", "Weak Gain (<50% gain) — Lacks parabolic extension")
+        )
 
     if data["rvol"] >= 15:
         score += 20
@@ -272,37 +319,82 @@ def calculate_short_score(data: dict) -> dict:
     if data["price"] > data["vwap"]:
         if vwap_diff >= 15:
             score += 25
-            boosters.append(("+25 pts", f"Stretched Above VWAP ({vwap_diff:+.1f}%) — Optimal fade premium!"))
+            boosters.append(
+                (
+                    "+25 pts",
+                    f"Stretched Above VWAP ({vwap_diff:+.1f}%) — Optimal fade premium!",
+                )
+            )
         else:
             score += 15
-            boosters.append(("+15 pts", f"Trading Above VWAP ({vwap_diff:+.1f}%)"))
+            boosters.append(
+                ("+15 pts", f"Trading Above VWAP ({vwap_diff:+.1f}%)")
+            )
     else:
         score -= 15
-        penalties.append(("-15 pts", f"Trading Below VWAP ({vwap_diff:+.1f}%) — Move already broke down"))
+        penalties.append(
+            (
+                "-15 pts",
+                f"Trading Below VWAP ({vwap_diff:+.1f}%) — Move already broke down",
+            )
+        )
 
     if 0 < data["float_shares"] <= 10_000_000:
         score += 10
-        boosters.append(("+10 pts", f"Low Float Micro-Cap ({data['float_shares']/1e6:.1f}M shares)"))
+        boosters.append(
+            (
+                "+10 pts",
+                f"Low Float Micro-Cap ({data['float_shares']/1e6:.1f}M shares)",
+            )
+        )
 
     if data["z_score"] is not None and data["z_score"] < 1.8:
         score += 10
-        boosters.append(("+10 pts", f"Altman Z-Score in Distress Zone ({data['z_score']:.2f} < 1.8)"))
+        boosters.append(
+            (
+                "+10 pts",
+                f"Altman Z-Score in Distress Zone ({data['z_score']:.2f} < 1.8)",
+            )
+        )
 
-    if data["cash_runway_months"] is not None and data["cash_runway_months"] < 6.0:
+    if (
+        data["cash_runway_months"] is not None
+        and data["cash_runway_months"] < 6.0
+    ):
         score += 10
-        boosters.append(("+10 pts", f"Severe Cash Burn (Runway: {data['cash_runway_months']:.1f} months)"))
+        boosters.append(
+            (
+                "+10 pts",
+                f"Severe Cash Burn (Runway: {data['cash_runway_months']:.1f} months)",
+            )
+        )
 
     if data["f_score"] is not None and data["f_score"] <= 2:
         score += 10
-        boosters.append(("+10 pts", f"Deteriorating Fundamentals (Piotroski F-Score: {data['f_score']}/9)"))
+        boosters.append(
+            (
+                "+10 pts",
+                f"Deteriorating Fundamentals (Piotroski F-Score: {data['f_score']}/9)",
+            )
+        )
 
     if data["drop_from_high"] <= 0.05:
         score -= 30
-        penalties.append(("-30 pts", "Hugging Day Highs (Drop ≤5%) — Extreme continuation/squeeze risk!"))
+        penalties.append(
+            (
+                "-30 pts",
+                "Hugging Day Highs (Drop ≤5%) — Extreme continuation/squeeze risk!",
+            )
+        )
 
     if data["ctb_estimated"] and data["ctb_estimated"] > 50.0:
         score -= 15
-        penalties.append(("-15 pts", f"High Borrow Cost ({data['ctb_estimated']:.1f}% CTB)"))
+        penalties.append(
+            (
+                "-15 pts",
+                f"High Borrow Cost ({data['ctb_estimated']:.1f}% CTB)",
+            )
+        )
 
     final_score = max(0, min(100, score))
 
@@ -337,14 +429,16 @@ with col_input:
 
 with col_btn:
     st.write(" ")
-    analyze_click = st.button("Analyze Stock", use_container_width=True)
+    analyze_click = st.button("Analyze Stock", width="stretch")
 
 if ticker_input or analyze_click:
     with st.spinner(f"Fetching market data for {ticker_input}..."):
         data = fetch_stock_data(ticker_input)
 
     if not data:
-        st.error(f"Could not retrieve data for **{ticker_input}**. Verify symbol or check internet connection.")
+        st.error(
+            f"Could not retrieve data for **{ticker_input}**. Verify symbol or check internet connection."
+        )
     else:
         eval_res = calculate_short_score(data)
         borrow_status, borrow_reason = estimate_borrow_status(
@@ -360,18 +454,28 @@ if ticker_input or analyze_click:
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Short Score", f"{eval_res['final_score']}/100")
         m2.metric("Signal State", eval_res["status"])
-        m3.metric("Current Price", f"${data['price']:.2f}", f"{data['gain_24h']*100:+.1f}%")
+        m3.metric(
+            "Current Price",
+            f"${data['price']:.2f}",
+            f"{data['gain_24h']*100:+.1f}%",
+        )
         m4.metric("Borrow Outlook", borrow_status)
 
-        st.info(f"**State Summary:** {eval_res['status_msg']} *(Session Date: {data['trade_date']})*")
+        st.info(
+            f"**State Summary:** {eval_res['status_msg']} *(Session Date: {data['trade_date']})*"
+        )
 
         # --- 10-DAY EXTENDED HOURS PLOTLY CHART ---
-        st.subheader("📈 10-Day Intraday Baseline Chart (Pre/Post Market Highlighted)")
+        st.subheader(
+            "📈 10-Day Intraday Baseline Chart (Pre/Post Market Highlighted)"
+        )
 
         hist_df = data["hist_10d"].copy()
         eastern_tz = pytz.timezone("US/Eastern")
         if hist_df.index.tz is None:
-            hist_df.index = hist_df.index.tz_localize("UTC").tz_convert(eastern_tz)
+            hist_df.index = hist_df.index.tz_localize("UTC").tz_convert(
+                eastern_tz
+            )
         else:
             hist_df.index = hist_df.index.tz_convert(eastern_tz)
 
@@ -404,13 +508,41 @@ if ticker_input or analyze_click:
         unique_dates = sorted(list(set(hist_df.index.date)))
 
         for d in unique_dates:
-            pm_start = eastern_tz.localize(datetime.combine(d, datetime.min.time()).replace(hour=4, minute=0))
-            pm_end = eastern_tz.localize(datetime.combine(d, datetime.min.time()).replace(hour=9, minute=30))
-            am_start = eastern_tz.localize(datetime.combine(d, datetime.min.time()).replace(hour=16, minute=0))
-            am_end = eastern_tz.localize(datetime.combine(d, datetime.min.time()).replace(hour=20, minute=0))
+            pm_start = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=4, minute=0
+                )
+            )
+            pm_end = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=9, minute=30
+                )
+            )
+            am_start = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=16, minute=0
+                )
+            )
+            am_end = eastern_tz.localize(
+                datetime.combine(d, datetime.min.time()).replace(
+                    hour=20, minute=0
+                )
+            )
 
-            fig.add_vrect(x0=pm_start, x1=pm_end, fillcolor="rgba(255, 215, 0, 0.08)", layer="below", line_width=0)
-            fig.add_vrect(x0=am_start, x1=am_end, fillcolor="rgba(138, 43, 226, 0.12)", layer="below", line_width=0)
+            fig.add_vrect(
+                x0=pm_start,
+                x1=pm_end,
+                fillcolor="rgba(255, 215, 0, 0.08)",
+                layer="below",
+                line_width=0,
+            )
+            fig.add_vrect(
+                x0=am_start,
+                x1=am_end,
+                fillcolor="rgba(138, 43, 226, 0.12)",
+                layer="below",
+                line_width=0,
+            )
 
         fig.update_layout(
             template="plotly_dark",
@@ -422,7 +554,7 @@ if ticker_input or analyze_click:
             xaxis=dict(type="date", nticks=10),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # TECHNICAL BREAKDOWN
         st.subheader("📊 Intraday Metric Breakdown")
@@ -433,11 +565,19 @@ if ticker_input or analyze_click:
         d2.write(f"**Drop From High:** {data['drop_from_high']*100:.1f}%")
         d2.write(f"**Spike Rejection:** {data['rejection_pct']*100:.1f}%")
 
-        vwap_relation = "ABOVE 🟢" if data["price"] > data["vwap"] else "BELOW 🔴"
-        d3.write(f"**Today VWAP:** ${data['vwap']:.2f} ({vwap_relation} {eval_res['vwap_diff']:+.1f}%)")
+        vwap_relation = (
+            "ABOVE 🟢" if data["price"] > data["vwap"] else "BELOW 🔴"
+        )
+        d3.write(
+            f"**Today VWAP:** ${data['vwap']:.2f} ({vwap_relation} {eval_res['vwap_diff']:+.1f}%)"
+        )
         d3.write(f"**RVOL Proxy:** {data['rvol']:.1f}x")
 
-        float_str = f"{data['float_shares']/1e6:.1f}M" if data["float_shares"] else "N/A"
+        float_str = (
+            f"{data['float_shares']/1e6:.1f}M"
+            if data["float_shares"]
+            else "N/A"
+        )
         d4.write(f"**Float Size:** {float_str}")
         d4.write(f"**Borrow Note:** {borrow_reason}")
 
@@ -451,16 +591,40 @@ if ticker_input or analyze_click:
         with col_metrics:
             st.markdown("#### 📊 Live Stock Metrics")
 
-            z_val = f"{data['z_score']:.2f}" if data["z_score"] is not None else "N/A"
-            f_val = f"{data['f_score']}/9" if data["f_score"] is not None else "N/A"
-            ctb_val = f"{data['ctb_estimated']:.1f}% APY" if data["ctb_estimated"] is not None else "N/A"
+            z_val = (
+                f"{data['z_score']:.2f}"
+                if data["z_score"] is not None
+                else "N/A"
+            )
+            f_val = (
+                f"{data['f_score']}/9"
+                if data["f_score"] is not None
+                else "N/A"
+            )
+            ctb_val = (
+                f"{data['ctb_estimated']:.1f}% APY"
+                if data["ctb_estimated"] is not None
+                else "N/A"
+            )
 
-            runway_val = f"{data['cash_runway_months']:.1f} Months" if data["cash_runway_months"] is not None else "N/A"
+            runway_val = (
+                f"{data['cash_runway_months']:.1f} Months"
+                if data["cash_runway_months"] is not None
+                else "N/A"
+            )
             if data["cash_runway_months"] == 999.0:
                 runway_val = "Cash Positive 🟢"
 
-            burn_val = f"${data['cash_burn_monthly']/1e6:.2f}M / mo" if data["cash_burn_monthly"] else "N/A"
-            dilution_val = f"{data['share_growth_yoy']:+.1f}% YoY" if data["share_growth_yoy"] is not None else "N/A"
+            burn_val = (
+                f"${data['cash_burn_monthly']/1e6:.2f}M / mo"
+                if data["cash_burn_monthly"]
+                else "N/A"
+            )
+            dilution_val = (
+                f"{data['share_growth_yoy']:+.1f}% YoY"
+                if data["share_growth_yoy"] is not None
+                else "N/A"
+            )
 
             m_c1, m_c2 = st.columns(2)
             m_c1.write(f"**Altman Z-Score:** {z_val}")
@@ -474,22 +638,79 @@ if ticker_input or analyze_click:
         with col_checklist:
             st.markdown("#### 📋 Short Candidate Target Criteria")
 
-            z_match = "✅ Match" if (data["z_score"] is not None and data["z_score"] < 1.8) else "❌ No"
-            f_match = "✅ Match" if (data["f_score"] is not None and data["f_score"] <= 2) else "❌ No"
-            runway_match = "✅ Match" if (data["cash_runway_months"] is not None and data["cash_runway_months"] < 6.0) else "❌ No"
-            ctb_match = "✅ Match" if (data["ctb_estimated"] is not None and data["ctb_estimated"] < 20.0) else "⚠️ High Fees"
-            dilution_match = "✅ Match" if (data["share_growth_yoy"] is not None and data["share_growth_yoy"] > 20.0) else "❌ No"
+            z_match = (
+                "✅ Match"
+                if (data["z_score"] is not None and data["z_score"] < 1.8)
+                else "❌ No"
+            )
+            f_match = (
+                "✅ Match"
+                if (data["f_score"] is not None and data["f_score"] <= 2)
+                else "❌ No"
+            )
+            runway_match = (
+                "✅ Match"
+                if (
+                    data["cash_runway_months"] is not None
+                    and data["cash_runway_months"] < 6.0
+                )
+                else "❌ No"
+            )
+            ctb_match = (
+                "✅ Match"
+                if (
+                    data["ctb_estimated"] is not None
+                    and data["ctb_estimated"] < 20.0
+                )
+                else "⚠️ High Fees"
+            )
+            dilution_match = (
+                "✅ Match"
+                if (
+                    data["share_growth_yoy"] is not None
+                    and data["share_growth_yoy"] > 20.0
+                )
+                else "❌ No"
+            )
 
-            chk_df = pd.DataFrame([
-                {"Metric": "Altman Z-Score", "Target Signal": "< 1.8 (Distress)", "Status": z_match},
-                {"Metric": "Piotroski F-Score", "Target Signal": "0 - 2 (Weak)", "Status": f_match},
-                {"Metric": "Cash Runway", "Target Signal": "< 6 Months", "Status": runway_match},
-                {"Metric": "Cost to Borrow (CTB)", "Target Signal": "< 20% APY", "Status": ctb_match},
-                {"Metric": "Shares Growth YoY", "Target Signal": "> 20% (Active Dilution)", "Status": dilution_match},
-                {"Metric": "Short Interest / Float", "Target Signal": "< 15% (Low Squeeze)", "Status": "✅ Match" if data["short_pct_float"] < 0.15 else "⚠️ High"},
-            ])
+            chk_df = pd.DataFrame(
+                [
+                    {
+                        "Metric": "Altman Z-Score",
+                        "Target Signal": "< 1.8 (Distress)",
+                        "Status": z_match,
+                    },
+                    {
+                        "Metric": "Piotroski F-Score",
+                        "Target Signal": "0 - 2 (Weak)",
+                        "Status": f_match,
+                    },
+                    {
+                        "Metric": "Cash Runway",
+                        "Target Signal": "< 6 Months",
+                        "Status": runway_match,
+                    },
+                    {
+                        "Metric": "Cost to Borrow (CTB)",
+                        "Target Signal": "< 20% APY",
+                        "Status": ctb_match,
+                    },
+                    {
+                        "Metric": "Shares Growth YoY",
+                        "Target Signal": "> 20% (Active Dilution)",
+                        "Status": dilution_match,
+                    },
+                    {
+                        "Metric": "Short Interest / Float",
+                        "Target Signal": "< 15% (Low Squeeze)",
+                        "Status": "✅ Match"
+                        if data["short_pct_float"] < 0.15
+                        else "⚠️ High",
+                    },
+                ]
+            )
 
-            st.dataframe(chk_df, use_container_width=True, hide_index=True)
+            st.dataframe(chk_df, width="stretch", hide_index=True)
 
         st.divider()
 
