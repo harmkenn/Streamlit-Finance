@@ -174,7 +174,7 @@ if df is not None:
             except ValueError:
                 return 0.0
                 
-        df = df[df[price_col].apply(parse_price) >= 0.90].copy()
+        df = df[df[price_col].apply(parse_price) >= 0.80].copy()
 
     volume_col = next((col for col in df.columns if "volume" in col.lower()), None)
     if volume_col:
