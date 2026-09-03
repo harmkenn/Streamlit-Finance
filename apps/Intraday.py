@@ -2,12 +2,31 @@ import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
 import pandas as pd
+import threading
+import time
 
 st.title("📈 Intraday Stock Prices (Including Pre-market & After-hours) v5.0")
+
+YAHOO_REQUEST_INTERVAL_SECONDS = 2.0
+_yahoo_request_lock = threading.Lock()
+_last_yahoo_request_at = 0.0
+
+
+def wait_for_yahoo_request_slot() -> None:
+    """Serialize Yahoo calls and keep request starts at least two seconds apart."""
+    global _last_yahoo_request_at
+
+    with _yahoo_request_lock:
+        elapsed = time.monotonic() - _last_yahoo_request_at
+        if elapsed < YAHOO_REQUEST_INTERVAL_SECONDS:
+            time.sleep(YAHOO_REQUEST_INTERVAL_SECONDS - elapsed)
+        _last_yahoo_request_at = time.monotonic()
+
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_history(ticker: str, period: str, interval: str, prepost: bool = False) -> pd.DataFrame:
     """Cache Yahoo history so one rerun does not issue duplicate requests."""
+    wait_for_yahoo_request_slot()
     return yf.Ticker(ticker).history(
         period=period,
         interval=interval,
@@ -18,6 +37,7 @@ def fetch_history(ticker: str, period: str, interval: str, prepost: bool = False
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_daily_histories(tickers: tuple[str, ...]) -> pd.DataFrame:
     """Fetch all daily sidebar data in one Yahoo request."""
+    wait_for_yahoo_request_slot()
     return yf.download(
         tickers=list(tickers),
         period="3mo",
