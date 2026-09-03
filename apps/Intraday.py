@@ -15,6 +15,29 @@ def fetch_history(ticker: str, period: str, interval: str, prepost: bool = False
     )
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_daily_histories(tickers: tuple[str, ...]) -> pd.DataFrame:
+    """Fetch all daily sidebar data in one Yahoo request."""
+    return yf.download(
+        tickers=list(tickers),
+        period="3mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=False,
+        group_by="ticker",
+    )
+
+
+def get_ticker_daily_data(data: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    if isinstance(data.columns, pd.MultiIndex):
+        if ticker in data.columns.get_level_values(0):
+            return data[ticker].dropna(how="all")
+        if ticker in data.columns.get_level_values(1):
+            return data.xs(ticker, axis=1, level=1).dropna(how="all")
+        return pd.DataFrame()
+    return data.dropna(how="all")
+
+
 # --- Parse tickers from shared session state ---
 raw_tickers = st.session_state.get("user_tickers", "")
 tickers_list = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
@@ -29,6 +52,9 @@ if ticker:
     try:
         if refresh_button:
             fetch_history.clear()
+            fetch_daily_histories.clear()
+
+        daily_histories = fetch_daily_histories(tuple(dict.fromkeys(tickers_list))) if tickers_list else pd.DataFrame()
 
         data = fetch_history(ticker, "10d", "5m", prepost=True)
 
@@ -81,7 +107,7 @@ if ticker:
 
         # --- Stats Table ---
         with col3:
-            stats_data = fetch_history(ticker, "3mo", "1d")
+            stats_data = get_ticker_daily_data(daily_histories, ticker)
             
             if not stats_data.empty:
                 w1 = stats_data.tail(5)
@@ -126,9 +152,10 @@ if ticker:
 st.sidebar.header("📊 Current Prices & 60-Day Range")
 
 if tickers_list:
+    daily_histories = fetch_daily_histories(tuple(dict.fromkeys(tickers_list)))
     for t in tickers_list:
         try:
-            month_data = fetch_history(t, "2mo", "1d")
+            month_data = get_ticker_daily_data(daily_histories, t)
             if len(month_data) >= 2:
                 latest = month_data["Close"].iloc[-1]
                 prev_close = month_data["Close"].iloc[-2]
