@@ -138,6 +138,24 @@ def highlight_high_gainers(row, yellow_threshold, green_threshold):
 
     return [""] * len(row)
 
+
+def parse_volume(val):
+    try:
+        value = str(val).replace(",", "").strip().upper()
+        multiplier = 1
+        if value.endswith("K"):
+            multiplier = 1_000
+            value = value[:-1]
+        elif value.endswith("M"):
+            multiplier = 1_000_000
+            value = value[:-1]
+        elif value.endswith("B"):
+            multiplier = 1_000_000_000
+            value = value[:-1]
+        return float(value) * multiplier
+    except (TypeError, ValueError):
+        return 0.0
+
 # Fetch Data
 target_url = PAGES[selected_page_name]
 st.subheader(f"Showing Top 10: {selected_page_name}")
@@ -158,7 +176,11 @@ if df is not None:
                 
         df = df[df[price_col].apply(parse_price) >= 0.90].copy()
 
-    # Limit to top 10 remaining rows after price filtering
+    volume_col = next((col for col in df.columns if "volume" in col.lower()), None)
+    if volume_col:
+        df = df[df[volume_col].apply(parse_volume) >= 500_000].copy()
+
+    # Limit to top 10 remaining rows after filtering
     df = df.head(10)
 
     # Identify symbol column name (usually 'Symbol' or 'Ticker')
