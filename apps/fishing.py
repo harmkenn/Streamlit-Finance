@@ -178,7 +178,7 @@ if df is not None:
 
     volume_col = next((col for col in df.columns if "volume" in col.lower()), None)
     if volume_col:
-        df = df[df[volume_col].apply(parse_volume) >= 5_000].copy()
+        df = df[df[volume_col].apply(parse_volume) >= 1_000].copy()
 
     # Limit to top 10 remaining rows after filtering
     df = df.head(10)
