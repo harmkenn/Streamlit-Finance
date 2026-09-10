@@ -58,6 +58,38 @@ def get_ticker_daily_data(data: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return data.dropna(how="all")
 
 
+def add_market_hours_shading(fig: go.Figure, df: pd.DataFrame) -> None:
+    """Highlights pre-market and after-hours sessions on a Plotly figure."""
+    if df.empty:
+        return
+
+    # Group data by trading date to isolate daily pre-market and after-hours sessions
+    dates = pd.Series(df.index.date).unique()
+
+    for d in dates:
+        # Pre-market (04:00 to 09:30 Eastern)
+        pre_market = df[(df.index.date == d) & (df.index.time >= pd.to_datetime("04:00").time()) & (df.index.time < pd.to_datetime("09:30").time())]
+        if not pre_market.empty:
+            fig.add_vrect(
+                x0=pre_market.index[0],
+                x1=pre_market.index[-1],
+                fillcolor="rgba(255, 165, 0, 0.15)",  # Soft Orange Shading
+                layer="below",
+                line_width=0,
+            )
+
+        # After-hours (16:00 to 20:00 Eastern)
+        after_hours = df[(df.index.date == d) & (df.index.time >= pd.to_datetime("16:00").time()) & (df.index.time <= pd.to_datetime("20:00").time())]
+        if not after_hours.empty:
+            fig.add_vrect(
+                x0=after_hours.index[0],
+                x1=after_hours.index[-1],
+                fillcolor="rgba(128, 0, 128, 0.15)",  # Soft Purple Shading
+                layer="below",
+                line_width=0,
+            )
+
+
 # --- Parse tickers from shared session state ---
 raw_tickers = st.session_state.get("user_tickers", "")
 tickers_list = [t.strip().upper() for t in raw_tickers.split(",") if t.strip()]
@@ -143,9 +175,26 @@ if ticker:
 
         # --- Price Chart ---
         price_fig = go.Figure()
+        
+        # Add Extended Hours Shading to Price Chart
+        add_market_hours_shading(price_fig, data)
+
         price_fig.add_trace(go.Scatter(
             x=data.index, y=data["Close"], mode="lines", name="Price", line=dict(color="blue")
         ))
+        
+        # Add dummy traces to display color definitions in the chart legend
+        price_fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="markers",
+            marker=dict(size=10, color="rgba(255, 165, 0, 0.6)", shape="square"),
+            name="Pre-Market (04:00-09:30 ET)"
+        ))
+        price_fig.add_trace(go.Scatter(
+            x=[None], y=[None], mode="markers",
+            marker=dict(size=10, color="rgba(128, 0, 128, 0.6)", shape="square"),
+            name="After-Hours (16:00-20:00 ET)"
+        ))
+
         price_fig.update_layout(
             title=f"{ticker} Intraday Price (Including Pre-market & After-hours)",
             xaxis_title="Time", yaxis_title="Price", showlegend=True
@@ -154,6 +203,10 @@ if ticker:
 
         # --- Volume Chart ---
         volume_fig = go.Figure()
+        
+        # Optional: Add Shading to Volume Chart as well
+        add_market_hours_shading(volume_fig, data)
+
         volume_fig.add_trace(go.Bar(
             x=data.index, y=data["Volume"], name="Volume", marker=dict(color="grey")
         ))
