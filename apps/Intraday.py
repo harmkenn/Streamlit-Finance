@@ -183,15 +183,15 @@ if ticker:
             x=data.index, y=data["Close"], mode="lines", name="Price", line=dict(color="blue")
         ))
         
-        # Add dummy traces to display color definitions in the chart legend
+        # Fixed: Changed shape="square" to symbol="square"
         price_fig.add_trace(go.Scatter(
             x=[None], y=[None], mode="markers",
-            marker=dict(size=10, color="rgba(255, 165, 0, 0.6)", shape="square"),
+            marker=dict(size=10, color="rgba(255, 165, 0, 0.6)", symbol="square"),
             name="Pre-Market (04:00-09:30 ET)"
         ))
         price_fig.add_trace(go.Scatter(
             x=[None], y=[None], mode="markers",
-            marker=dict(size=10, color="rgba(128, 0, 128, 0.6)", shape="square"),
+            marker=dict(size=10, color="rgba(128, 0, 128, 0.6)", symbol="square"),
             name="After-Hours (16:00-20:00 ET)"
         ))
 
@@ -204,7 +204,7 @@ if ticker:
         # --- Volume Chart ---
         volume_fig = go.Figure()
         
-        # Optional: Add Shading to Volume Chart as well
+        # Add Shading to Volume Chart
         add_market_hours_shading(volume_fig, data)
 
         volume_fig.add_trace(go.Bar(
