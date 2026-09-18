@@ -18,13 +18,13 @@ def load_tickers():
 st.set_page_config(layout="wide", page_title="Finance")
 
 sub_app_names = {
+    "fishing.py": "Fishing",
+    "shortsell.py": "Short Screener",
     "Intraday.py": "Intraday",
     "BuySellHold.py": "Buy Sell or Hold",
     "Compare.py": "Compare",
     "Whatif.py": "Last Year",
-    "watchlist.py": "Watchlist",
-    "shortsell.py": "Short Screener",
-    "fishing.py": "Fishing",
+    "watchlist.py": "Watchlist",   
 }
 
 sub_apps_folder = "apps"
