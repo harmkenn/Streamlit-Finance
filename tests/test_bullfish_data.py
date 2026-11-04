@@ -31,7 +31,7 @@ def test_parse_stockanalysis_gainers_maps_table_to_dashboard_columns():
         "Price ($)": 1234.5,
         "Change (%)": 12.5,
         "Volume": 56789.0,
-        "URL": "https://www.webull.com/quote/us/ticker/abcd",
+        "URL": "https://stockanalysis.com/stocks/abcd/",
     }
 
 

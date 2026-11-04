@@ -63,7 +63,7 @@ def parse_stockanalysis_gainers(html: str) -> pd.DataFrame:
             "Price ($)": float(item["Stock Price"].replace(",", "").replace("$", "")),
             "Change (%)": float(item["% Change"].replace(",", "").replace("%", "").replace("+", "")),
             "Volume": float(item["Volume"].replace(",", "")),
-            "URL": f"https://www.webull.com/quote/us/ticker/{ticker.lower()}",
+            "URL": f"https://stockanalysis.com/stocks/{ticker.lower()}/",
         })
 
     if not parsed_rows:
@@ -103,9 +103,9 @@ min_price = st.sidebar.number_input("Min Price ($)", value=0.80, step=0.10)
 min_vol = st.sidebar.number_input("Min Volume", value=1000, step=1000)
 
 st.sidebar.subheader("Highlight Thresholds (%)")
-yellow_t = st.sidebar.number_input("Yellow Threshold (%)", value=5.0)
-orange_t = st.sidebar.number_input("Orange Threshold (%)", value=10.0)
-red_t = st.sidebar.number_input("Red Threshold (%)", value=20.0)
+yellow_t = st.sidebar.number_input("Yellow Threshold (%)", value=100.0)
+orange_t = st.sidebar.number_input("Orange Threshold (%)", value=150.0)
+red_t = st.sidebar.number_input("Red Threshold (%)", value=200.0)
 
 if st.button("Refresh Data"):
     st.cache_data.clear()
@@ -139,7 +139,7 @@ if df_raw is not None and not df_raw.empty:
             styled_df,
             column_config={
                 "URL": st.column_config.LinkColumn(
-                    "Webull Link", display_text="Open on Webull"
+                    "StockAnalysis Link", display_text="Open on StockAnalysis"
                 )
             },
             use_container_width=True,
