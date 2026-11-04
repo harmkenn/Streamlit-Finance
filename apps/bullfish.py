@@ -3,12 +3,13 @@ from __future__ import annotations
 import pandas as pd
 import requests
 import streamlit as st
+from bs4 import BeautifulSoup
 
 # Set Streamlit layout configuration
 st.set_page_config(page_title="Webull Market Gainers", layout="wide")
 
-# Webull Top Gainers API Endpoint
-WEBULL_GAINERS_URL = "https://quoteapi.webullfintech.com/api/quote/v2/rank/topGainers"
+# StockAnalysis Top Gainers page
+GAINERS_URL = "https://stockanalysis.com/markets/gainers/"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -16,51 +17,58 @@ USER_AGENT = (
 
 
 @st.cache_data(ttl=30)  # Refresh cache every 30 seconds
-def fetch_webull_gainers(region_id: int = 6, limit: int = 50) -> pd.DataFrame | None:
-    """Fetches top gainers directly from Webull's API.
+def fetch_market_gainers() -> pd.DataFrame | None:
+    """Fetches top gainers from StockAnalysis.
 
-    Region 6 corresponds to US Markets.
+    The Webull quote API used previously is no longer available.
     """
-    params = {
-        "regionId": region_id,
-        "userRegionId": region_id,
-        "pageSize": limit,
-    }
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/json",
-    }
-
     try:
-        response = requests.get(WEBULL_GAINERS_URL, params=params, headers=headers, timeout=10)
+        response = requests.get(
+            GAINERS_URL,
+            headers={"User-Agent": USER_AGENT},
+            timeout=10,
+        )
         response.raise_for_status()
-        data = response.json()
-
-        # Webull API usually wraps items under a data key
-        ticker_list = data if isinstance(data, list) else data.get("data", [])
-
-        parsed_rows = []
-        for item in ticker_list:
-            ticker = item.get("symbol") or item.get("ticker", {}).get("symbol", "")
-            name = item.get("name") or item.get("ticker", {}).get("name", "")
-            price = float(item.get("close", 0) or item.get("price", 0))
-            change_ratio = float(item.get("changeRatio", 0)) * 100  # Convert decimal to %
-            volume = float(item.get("volume", 0))
-
-            parsed_rows.append({
-                "Ticker": ticker,
-                "Name": name,
-                "Price ($)": price,
-                "Change (%)": change_ratio,
-                "Volume": volume,
-                "URL": f"https://www.webull.com/quote/us/ticker/{ticker.lower()}",
-            })
-
-        return pd.DataFrame(parsed_rows)
+        return parse_stockanalysis_gainers(response.text)
 
     except (requests.RequestException, KeyError, ValueError) as err:
-        st.error(f"Failed to fetch data from Webull API: {err}")
+        st.error(f"Failed to fetch data from StockAnalysis: {err}")
         return None
+
+
+def parse_stockanalysis_gainers(html: str) -> pd.DataFrame:
+    """Parses the gainers table into the dashboard's market-data columns."""
+    soup = BeautifulSoup(html, "html.parser")
+    table = soup.find("table")
+    if table is None:
+        raise ValueError("Gainers table was not found in the response.")
+
+    headers = [cell.get_text(" ", strip=True) for cell in table.find_all("th")]
+    required_headers = ["Symbol", "Company Name", "% Change", "Stock Price", "Volume"]
+    missing_headers = [header for header in required_headers if header not in headers]
+    if missing_headers:
+        raise ValueError(f"Gainers table is missing columns: {', '.join(missing_headers)}")
+
+    parsed_rows = []
+    for row in table.find_all("tr")[1:]:
+        cells = [cell.get_text(" ", strip=True) for cell in row.find_all("td")]
+        if not cells:
+            continue
+
+        item = dict(zip(headers, cells))
+        ticker = item["Symbol"]
+        parsed_rows.append({
+            "Ticker": ticker,
+            "Name": item["Company Name"],
+            "Price ($)": float(item["Stock Price"].replace(",", "").replace("$", "")),
+            "Change (%)": float(item["% Change"].replace(",", "").replace("%", "").replace("+", "")),
+            "Volume": float(item["Volume"].replace(",", "")),
+            "URL": f"https://www.webull.com/quote/us/ticker/{ticker.lower()}",
+        })
+
+    if not parsed_rows:
+        raise ValueError("Gainers table contains no market data.")
+    return pd.DataFrame(parsed_rows)
 
 
 def apply_filters(
@@ -74,7 +82,7 @@ def apply_filters(
     return filtered.head(top_n).copy()
 
 
-def color_rows(row, yellow_thresh=5.0, orange_thresh=10.0, red_thresh=20.0):
+def color_rows(row, yellow_thresh=100.0, orange_thresh=150.0, red_thresh=200.0):
     """Applies conditional background coloring based on Change (%) threshold."""
     val = row["Change (%)"]
     if val >= red_thresh:
@@ -102,7 +110,7 @@ red_t = st.sidebar.number_input("Red Threshold (%)", value=20.0)
 if st.button("Refresh Data"):
     st.cache_data.clear()
 
-df_raw = fetch_webull_gainers()
+df_raw = fetch_market_gainers()
 
 if df_raw is not None and not df_raw.empty:
     df_filtered = apply_filters(df_raw, min_price=min_price, min_volume=min_vol, top_n=10)
