@@ -354,8 +354,14 @@ def calculate_short_score(data: dict) -> dict:
         score += 10
         boosters.append(("+10 pts", "Elevated Relative Volume (RVOL ≥5x)"))
 
-    vwap_diff = ((data["price"] - data["vwap"]) / data["vwap"]) * 100
-    if data["price"] > data["vwap"]:
+    vwap = data["vwap"]
+    vwap_diff = (
+        ((data["price"] - vwap) / vwap) * 100
+        if vwap > 0
+        else 0.0
+    )
+    above_vwap = vwap > 0 and data["price"] > vwap
+    if above_vwap:
         if vwap_diff >= 15:
             score += 25
             boosters.append(
@@ -369,13 +375,17 @@ def calculate_short_score(data: dict) -> dict:
             boosters.append(
                 ("+15 pts", f"Trading Above VWAP ({vwap_diff:+.1f}%)")
             )
-    else:
+    elif vwap > 0:
         score -= 15
         penalties.append(
             (
                 "-15 pts",
                 f"Trading Below VWAP ({vwap_diff:+.1f}%) — Move already broke down",
             )
+        )
+    else:
+        penalties.append(
+            ("N/A", "VWAP unavailable — extension cannot be assessed")
         )
 
     if 0 < data["float_shares"] <= 10_000_000:
@@ -437,7 +447,7 @@ def calculate_short_score(data: dict) -> dict:
 
     final_score = max(0, min(100, score))
 
-    if final_score >= 75 and data["price"] > data["vwap"]:
+    if final_score >= 75 and above_vwap:
         status = "🔴 TRIGGER"
         status_msg = "Stock is up >100% and extended ABOVE VWAP. Ideal single-day fade location."
     elif final_score >= 55:
@@ -470,13 +480,23 @@ with col_btn:
     st.write(" ")
     analyze_click = st.button("Analyze Stock", width="stretch")
 
-if ticker_input or analyze_click:
-    with st.spinner(f"Fetching market data for {ticker_input}..."):
-        data = fetch_stock_data(ticker_input)
+if analyze_click:
+    st.session_state["shortsell_analyzed_ticker"] = ticker_input
+
+analyzed_ticker = st.session_state.get("shortsell_analyzed_ticker")
+if analyzed_ticker:
+    if analyzed_ticker != ticker_input:
+        st.caption(
+            f"Showing the last analysis for {analyzed_ticker}. "
+            "Click Analyze Stock to analyze the selected ticker."
+        )
+
+    with st.spinner(f"Fetching market data for {analyzed_ticker}..."):
+        data = fetch_stock_data(analyzed_ticker)
 
     if not data:
         st.error(
-            f"Could not retrieve data for **{ticker_input}**. Verify symbol or check internet connection."
+            f"Could not retrieve data for **{analyzed_ticker}**. Verify symbol or check internet connection."
         )
     else:
         eval_res = calculate_short_score(data)

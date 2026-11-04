@@ -10,6 +10,7 @@ yahooquery
 plotly
 prophet
 yfinance
+websockets
 mibian
 matplotlib
 scikit-learn
