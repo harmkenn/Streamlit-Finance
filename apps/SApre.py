@@ -62,7 +62,7 @@ def parse_stockanalysis_gainers(html: str) -> pd.DataFrame:
             "Name": item["Company Name"],
             "Price ($)": float(item["Premkt. Price"].replace(",", "").replace("$", "")),
             "Change (%)": float(item["% Change"].replace(",", "").replace("%", "").replace("+", "")),
-            "Volume": float(item["Volume"].replace(",", "")),
+            "Volume": float(item["Pre. Volume"].replace(",", "")),
             "URL": f"https://stockanalysis.com/stocks/{ticker.lower()}/",
         })
 
