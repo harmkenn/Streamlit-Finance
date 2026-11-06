@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import requests
 import streamlit as st
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup 
 
 # Set Streamlit layout configuration
 st.set_page_config(page_title="SA Premarket", layout="wide")
