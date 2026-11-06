@@ -19,7 +19,7 @@ st.set_page_config(layout="wide", page_title="Finance")
 
 sub_app_names = {
     "bullfish.py": "WeBull Market Gainers",
-    "fishing.py": "Fishing",
+    "SApre.py": "SA Premarket",
     "shortsell.py": "Short Screener",
     "Intraday.py": "Intraday",
     "BuySellHold.py": "Buy Sell or Hold",
