@@ -3,29 +3,38 @@ from __future__ import annotations
 import pandas as pd
 import requests
 import streamlit as st
-from bs4 import BeautifulSoup 
+from bs4 import BeautifulSoup
 
 # Set Streamlit layout configuration
 st.set_page_config(page_title="SA Premarket", layout="wide")
 
 # StockAnalysis Top Gainers page
 GAINERS_URL = "https://stockanalysis.com/markets/premarket/"
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-)
+
+# Comprehensive headers to mimic an actual browser session and bypass CDN static caching
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
 
 
-@st.cache_data(ttl=30)  # Refresh cache every 30 seconds
+@st.cache_data(ttl=30, show_spinner=False)
 def fetch_market_gainers() -> pd.DataFrame | None:
     """Fetches top gainers from StockAnalysis.
 
-    The Webull quote API used previously is no longer available.
+    Uses dynamic cache-busting parameters and full browser headers to 
+    ensure premarket live data is retrieved rather than a static snapshot.
     """
     try:
         response = requests.get(
             GAINERS_URL,
-            headers={"User-Agent": USER_AGENT},
+            headers=HEADERS,
+            params={"_nocache": st.session_state.get("refresh_count", 0)},
             timeout=10,
         )
         response.raise_for_status()
@@ -107,8 +116,14 @@ yellow_t = st.sidebar.number_input("Yellow Threshold (%)", value=100.0)
 orange_t = st.sidebar.number_input("Orange Threshold (%)", value=150.0)
 red_t = st.sidebar.number_input("Red Threshold (%)", value=200.0)
 
-if st.button("Refresh Data"):
-    st.cache_data.clear()
+# Session state initialization for cache busting
+if "refresh_count" not in st.session_state:
+    st.session_state["refresh_count"] = 0
+
+if st.sidebar.button("🔄 Refresh Data"):
+    fetch_market_gainers.clear()
+    st.session_state["refresh_count"] += 1
+    st.rerun()
 
 df_raw = fetch_market_gainers()
 
@@ -118,7 +133,6 @@ if df_raw is not None and not df_raw.empty:
     if df_filtered.empty:
         st.warning("No stocks matched the current filter criteria.")
     else:
-        # Format links for Streamlit LinkColumn or markdown rendering
         df_display = df_filtered.copy()
 
         # Apply Pandas Styling for colors
