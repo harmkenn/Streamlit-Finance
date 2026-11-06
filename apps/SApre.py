@@ -44,7 +44,7 @@ def parse_stockanalysis_gainers(html: str) -> pd.DataFrame:
         raise ValueError("Gainers table was not found in the response.")
 
     headers = [cell.get_text(" ", strip=True) for cell in table.find_all("th")]
-    required_headers = ["Symbol", "Company Name", "% Change", "Stock Price", "Volume"]
+    required_headers = ["Symbol", "Company Name", "% Change", "Premkt. Price", "Pre. Volume"]
     missing_headers = [header for header in required_headers if header not in headers]
     if missing_headers:
         raise ValueError(f"Gainers table is missing columns: {', '.join(missing_headers)}")
