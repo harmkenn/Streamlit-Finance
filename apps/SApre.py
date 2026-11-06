@@ -11,7 +11,7 @@ st.set_page_config(page_title="SA Premarket", layout="wide")
 # StockAnalysis Top Gainers page
 GAINERS_URL = "https://stockanalysis.com/markets/premarket/"
 
-# Comprehensive headers to mimic an actual browser session and bypass CDN static caching
+# Headers to bypass static CDN caching
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -23,13 +23,20 @@ HEADERS = {
 }
 
 
+def parse_float(val_str: str) -> float:
+    """Helper function to convert table strings to float safely."""
+    cleaned = val_str.replace(",", "").replace("$", "").replace("%", "").replace("+", "").strip()
+    if cleaned in ("-", "", "N/A", "--", "None"):
+        return 0.0
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
 @st.cache_data(ttl=30, show_spinner=False)
 def fetch_market_gainers() -> pd.DataFrame | None:
-    """Fetches top gainers from StockAnalysis.
-
-    Uses dynamic cache-busting parameters and full browser headers to 
-    ensure premarket live data is retrieved rather than a static snapshot.
-    """
+    """Fetches top gainers from StockAnalysis."""
     try:
         response = requests.get(
             GAINERS_URL,
@@ -69,9 +76,9 @@ def parse_stockanalysis_gainers(html: str) -> pd.DataFrame:
         parsed_rows.append({
             "Ticker": ticker,
             "Name": item["Company Name"],
-            "Price ($)": float(item["Premkt. Price"].replace(",", "").replace("$", "")),
-            "Change (%)": float(item["% Change"].replace(",", "").replace("%", "").replace("+", "")),
-            "Volume": float(item["Pre. Volume"].replace(",", "")),
+            "Price ($)": parse_float(item["Premkt. Price"]),
+            "Change (%)": parse_float(item["% Change"]),
+            "Volume": parse_float(item["Pre. Volume"]),
             "URL": f"https://stockanalysis.com/stocks/{ticker.lower()}/",
         })
 
@@ -116,7 +123,7 @@ yellow_t = st.sidebar.number_input("Yellow Threshold (%)", value=100.0)
 orange_t = st.sidebar.number_input("Orange Threshold (%)", value=150.0)
 red_t = st.sidebar.number_input("Red Threshold (%)", value=200.0)
 
-# Session state initialization for cache busting
+# Session state initialization for cache clearing
 if "refresh_count" not in st.session_state:
     st.session_state["refresh_count"] = 0
 
