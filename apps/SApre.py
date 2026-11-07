@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
+from streamlit_autorefresh import st_autorefresh
 
 # Set Streamlit layout configuration
 st.set_page_config(page_title="SA Premarket", layout="wide")
@@ -34,7 +35,7 @@ def parse_float(val_str: str) -> float:
         return 0.0
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def fetch_market_gainers() -> pd.DataFrame | None:
     """Fetches top gainers from StockAnalysis."""
     try:
@@ -132,6 +133,8 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.session_state["refresh_count"] += 1
     st.rerun()
 
+st_autorefresh(interval=10_000, key="sapre_auto_refresh")
+
 df_raw = fetch_market_gainers()
 
 if df_raw is not None and not df_raw.empty:
@@ -163,7 +166,7 @@ if df_raw is not None and not df_raw.empty:
                     "StockAnalysis Link", display_text="Open on StockAnalysis"
                 )
             },
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 else:

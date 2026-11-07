@@ -18,7 +18,7 @@ def load_tickers():
 st.set_page_config(layout="wide", page_title="Finance")
 
 sub_app_names = {
-    "bullfish.py": "WeBull Market Gainers",
+    "SAopen.py": "SA Open Market",
     "SApre.py": "SA Premarket",
     "shortsell.py": "Short Screener",
     "Intraday.py": "Intraday",

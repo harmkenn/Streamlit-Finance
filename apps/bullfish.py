@@ -142,7 +142,7 @@ if df_raw is not None and not df_raw.empty:
                     "StockAnalysis Link", display_text="Open on StockAnalysis"
                 )
             },
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 else:
