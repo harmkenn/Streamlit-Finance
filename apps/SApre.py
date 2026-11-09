@@ -75,12 +75,11 @@ def parse_stockanalysis_gainers(html: str) -> pd.DataFrame:
         item = dict(zip(headers, cells))
         ticker = item["Symbol"]
         parsed_rows.append({
-            "Ticker": ticker,
+            "Ticker": f"https://stockanalysis.com/stocks/{ticker}/",
             "Name": item["Company Name"],
             "Price ($)": parse_float(item["Premkt. Price"]),
             "Change (%)": parse_float(item["% Change"]),
             "Volume": parse_float(item["Pre. Volume"]),
-            "URL": f"https://stockanalysis.com/stocks/{ticker.lower()}/",
         })
 
     if not parsed_rows:
@@ -162,8 +161,8 @@ if df_raw is not None and not df_raw.empty:
         st.dataframe(
             styled_df,
             column_config={
-                "URL": st.column_config.LinkColumn(
-                    "StockAnalysis Link", display_text="Open on StockAnalysis"
+                "Ticker": st.column_config.LinkColumn(
+                    "Ticker", display_text=r"/stocks/([^/]+)/"
                 )
             },
             width="stretch",
