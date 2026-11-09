@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pandas as pd
+import pandas as pd 
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
