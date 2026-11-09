@@ -36,13 +36,13 @@ def parse_float(val_str: str) -> float:
 
 
 @st.cache_data(ttl=10, show_spinner=False)
-def fetch_market_gainers() -> pd.DataFrame | None:
+def fetch_market_gainers(refresh_token: int) -> pd.DataFrame | None:
     """Fetches top gainers from StockAnalysis."""
     try:
         response = requests.get(
             GAINERS_URL,
             headers=HEADERS,
-            params={"_nocache": st.session_state.get("refresh_count", 0)},
+            params={"_nocache": refresh_token},
             timeout=10,
         )
         response.raise_for_status()
@@ -133,9 +133,9 @@ if st.sidebar.button("🔄 Refresh Data"):
     st.session_state["refresh_count"] += 1
     st.rerun()
 
-st_autorefresh(interval=10_000, key="sapre_auto_refresh")
+auto_refresh_count = st_autorefresh(interval=10_000, key="sapre_auto_refresh")
 
-df_raw = fetch_market_gainers()
+df_raw = fetch_market_gainers(auto_refresh_count + st.session_state["refresh_count"])
 
 if df_raw is not None and not df_raw.empty:
     df_filtered = apply_filters(df_raw, min_price=min_price, min_volume=min_vol, top_n=10)
